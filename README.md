@@ -138,8 +138,3 @@ health-assistant/
 - [Astra DB](https://www.datastax.com/products/datastax-astra)
 - [Langflow](https://github.com/logspace-ai/langflow)
 
-## Contact
-
-Your Name - [@kstubhieeee](https://github.com/kstubhieeee)
-
-Project Link: [https://github.com/kstubhieeee/health-assistant](https://github.com/kstubhieeee/health-assistant) 
