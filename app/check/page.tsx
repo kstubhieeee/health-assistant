@@ -25,9 +25,10 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Info, Loader2 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import { marked } from "marked";
 
 const formSchema = z.object({
   highBP: z.boolean(),
@@ -51,6 +52,9 @@ const formSchema = z.object({
 export default function HealthCheck() {
   const { data: session, status } = useSession();
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [apiResponse, setApiResponse] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (status === "unauthenticated") {
@@ -80,6 +84,72 @@ export default function HealthCheck() {
     },
   });
 
+  const onSubmit = async (data: z.infer<typeof formSchema>) => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      
+      const response = await fetch("/api/health-assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          endpoint: "/lf/a5f41bdf-f499-42e4-9506-50a4e0a779fc/api/v1/run/1102782b-5597-4176-98b0-18a0f977e74b?stream=false",
+          body: {
+            input_value: JSON.stringify({
+              age: parseInt(data.age),
+              sex: data.sex,
+              bmi: parseFloat(data.bmi),
+              health_conditions: {
+                high_bp: data.highBP,
+                high_cholesterol: data.highCholesterol,
+                stroke: data.stroke,
+                heart_disease: data.heartDisease,
+              },
+              lifestyle: {
+                smoker: data.smoker,
+                physical_activity: data.physicalActivity,
+                fruits_consumption: data.fruitsConsumption,
+                vegetables_consumption: data.vegetablesConsumption,
+                heavy_alcohol: data.heavyAlcohol,
+              },
+              health_status: {
+                general_health: data.generalHealth,
+                mental_health: parseInt(data.mentalHealth),
+                physical_health: parseInt(data.physicalHealth),
+                difficulty_walking: data.difficultyWalking,
+              }
+            }),
+            input_type: "chat",
+            output_type: "chat",
+            tweaks: {
+              "ChatInput-sDv2I": {},
+              "GoogleGenerativeAIModel-xsrJU": {},
+              "ChatOutput-ubBb2": {},
+              "AstraDB-SbKxl": {},
+              "ParseData-IEx10": {}
+            }
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error + (errorData.details ? `\nDetails: ${errorData.details}` : ''));
+      }
+
+      const result = await response.json();
+      setApiResponse(result);
+      
+      console.log('API Response:', result);
+      
+    } catch (err) {
+      console.error('Detailed error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred while submitting the assessment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -105,7 +175,7 @@ export default function HealthCheck() {
           </p>
         </div>
         <Form {...form}>
-          <form className="space-y-8" onSubmit={form.handleSubmit((data) => console.log(data))}>
+          <form className="space-y-8" onSubmit={form.handleSubmit(onSubmit)}>
             <div className="grid gap-6 md:grid-cols-2">
               {/* Basic Information */}
               <div className="space-y-4">
@@ -280,9 +350,51 @@ export default function HealthCheck() {
               </div>
             </div>
 
-            <Button type="submit" className="w-full">
-              Submit Health Assessment
-            </Button>
+            <div className="flex justify-center">
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  "Submit Assessment"
+                )}
+              </Button>
+            </div>
+
+            {error && (
+              <div className="text-red-500 text-sm text-center">
+                {error}
+              </div>
+            )}
+
+            {apiResponse && (
+              <div className="mt-8 p-6 bg-secondary rounded-lg">
+                <h3 className="text-xl font-semibold mb-4">Health Assessment Results</h3>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  {apiResponse.outputs?.[0]?.outputs?.[0]?.outputs?.message?.message ? (
+                    <div 
+                      className="markdown-content"
+                      dangerouslySetInnerHTML={{ 
+                        __html: marked.parse(apiResponse.outputs[0].outputs[0].outputs.message.message) 
+                      }}
+                    />
+                  ) : apiResponse.type === 'text' ? (
+                    <div 
+                      className="markdown-content"
+                      dangerouslySetInnerHTML={{ 
+                        __html: marked.parse(apiResponse.text) 
+                      }}
+                    />
+                  ) : (
+                    <pre className="text-sm whitespace-pre-wrap">
+                      {JSON.stringify(apiResponse, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              </div>
+            )}
           </form>
         </Form>
       </Card>
