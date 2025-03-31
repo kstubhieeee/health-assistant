@@ -4,79 +4,59 @@ export async function POST(request: Request) {
   try {
     const { endpoint, body } = await request.json();
 
-    // Validate the required inputs
     if (!endpoint || !body) {
       return NextResponse.json(
-        { error: 'Endpoint and body are required.' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Application token stored in environment variable
-    const applicationToken = process.env.LANGFLOW_APP_TOKEN || "AstraCS:dcaKTrgBiPTdZIYSZZkmDRZj:b2aadd96784543bd95347705bfe1e678ac675a28c025a2302c9ad16836720abc";
-
-    // Langflow API URL
-    const url = `https://api.langflow.astra.datastax.com${endpoint}`;
-    console.log('Making request to:', url);
-    console.log('Request body:', JSON.stringify(body, null, 2));
-
-    // Make the API request
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${applicationToken}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify(body),
-    });
-
-    // Get the response text first
-    const responseText = await response.text();
-    console.log('Response status:', response.status);
-    console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-    console.log('Raw response:', responseText);
-
-    // Check if the response is HTML (indicating an auth error)
-    if (responseText.includes('<!DOCTYPE html>')) {
+    const token = process.env.ASTRA_DB_TOKEN;
+    if (!token) {
       return NextResponse.json(
-        { 
-          error: 'Authentication failed',
-          details: 'The API returned an HTML login page. This usually means the authentication token has expired or is invalid. Please check your API credentials.',
-          status: 401
-        },
-        { status: 401 }
+        { error: 'API token not configured' },
+        { status: 500 }
       );
     }
 
+    const response = await fetch(`https://astra.datastax.com${endpoint}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const responseText = await response.text();
+    console.log('Raw response:', responseText);
+
     if (!response.ok) {
       return NextResponse.json(
-        {
-          error: `API Error: ${response.status} ${response.statusText}`,
-          details: responseText,
+        { 
+          error: 'API request failed',
+          details: responseText
         },
         { status: response.status }
       );
     }
 
-    // Try to parse as JSON, if it fails, return the text as is
     try {
       const data = JSON.parse(responseText);
       return NextResponse.json(data);
-    } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      return NextResponse.json({ 
-        text: responseText,
-        type: 'text'
+    } catch (e) {
+      return NextResponse.json({
+        type: 'text',
+        text: responseText
       });
     }
-  } catch (error: any) {
-    console.error('API Error:', error);
+  } catch (error) {
+    console.error('Server error:', error);
     return NextResponse.json(
       { 
-        error: 'Server Error', 
-        details: error.message,
-        stack: error.stack
+        error: 'Failed to process health assessment',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     );
