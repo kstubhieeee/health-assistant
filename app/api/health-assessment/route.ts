@@ -11,7 +11,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const token = process.env.ASTRA_DB_TOKEN;
+    const token = process.env.LANGFLOW_API_TOKEN;
     if (!token) {
       return NextResponse.json(
         { error: 'API token not configured' },
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const response = await fetch(`https://astra.datastax.com${endpoint}`, {
+    const response = await fetch(`https://api.langflow.astra.datastax.com${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
