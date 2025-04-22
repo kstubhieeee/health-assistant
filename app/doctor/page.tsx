@@ -76,6 +76,10 @@ export default function DoctorPage() {
         throw new Error(data.error || "Login failed");
       }
 
+      // Store the JWT token and doctor data in localStorage
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("doctor", JSON.stringify(data.doctor));
+
       // On successful login, redirect to dashboard
       router.push("/doctor/dashboard");
     } catch (error: any) {
@@ -124,23 +128,9 @@ export default function DoctorPage() {
         throw new Error(data.error || "Registration failed");
       }
 
-      // After successful registration, log the doctor in
-      const loginResponse = await fetch("/api/auth/doctor-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: registrationData.email,
-          password: registrationData.password,
-        }),
-      });
-
-      if (!loginResponse.ok) {
-        // If login fails, just redirect to login page
-        router.push("/doctor");
-        return;
-      }
+      // Store the JWT token and doctor data in localStorage
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("doctor", JSON.stringify(data.doctor));
 
       // Redirect to dashboard to show verification status
       router.push("/doctor/dashboard");

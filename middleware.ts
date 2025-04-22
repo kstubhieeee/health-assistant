@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { verifyToken, extractTokenFromHeader } from '@/lib/jwt';
 
 export function middleware(request: NextRequest) {
   // Get the pathname from the URL
@@ -19,11 +20,23 @@ export function middleware(request: NextRequest) {
 
   // Check if the path is for doctor dashboard
   if (path.startsWith('/doctor/dashboard')) {
-    // Check for doctor session cookie
-    const doctorId = request.cookies.get('doctorId')?.value;
+    // Get authorization header
+    const authHeader = request.headers.get('authorization');
     
-    // If no doctor session, redirect to doctor login
-    if (!doctorId) {
+    // Extract token from header
+    const token = extractTokenFromHeader(authHeader);
+    
+    // If no token or invalid token, redirect to doctor login
+    if (!token) {
+      const url = new URL('/doctor', request.url);
+      return NextResponse.redirect(url);
+    }
+    
+    // Verify token
+    const decoded = verifyToken(token);
+    
+    // If token is invalid or not a doctor token, redirect to login
+    if (!decoded || decoded.role !== 'doctor') {
       const url = new URL('/doctor', request.url);
       return NextResponse.redirect(url);
     }

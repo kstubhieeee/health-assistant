@@ -1,16 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connect } from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
-import { cookies } from 'next/headers';
+import { verifyToken, extractTokenFromHeader } from '@/lib/jwt';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get doctor ID from cookies or request
-    const doctorId = cookies().get('doctorId')?.value;
+    // Get authorization header
+    const authHeader = request.headers.get('authorization');
     
-    if (!doctorId) {
+    // Extract token from header
+    const token = extractTokenFromHeader(authHeader);
+    
+    if (!token) {
       return NextResponse.json(
         { error: 'Not authenticated' },
+        { status: 401 }
+      );
+    }
+
+    // Verify token
+    const decoded = verifyToken(token);
+    
+    if (!decoded || decoded.role !== 'doctor') {
+      return NextResponse.json(
+        { error: 'Invalid token' },
         { status: 401 }
       );
     }
@@ -18,12 +31,10 @@ export async function GET(request: NextRequest) {
     // Connect to the database
     await connect();
 
-    // Find doctor by ID
-    const doctor = await Doctor.findById(doctorId);
+    // Find doctor by ID from token
+    const doctor = await Doctor.findById(decoded.id);
     
     if (!doctor) {
-      // Clear the cookie if doctor not found
-      cookies().delete('doctorId');
       return NextResponse.json(
         { error: 'Doctor not found' },
         { status: 404 }

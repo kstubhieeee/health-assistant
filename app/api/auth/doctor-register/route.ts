@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connect } from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
 import bcrypt from 'bcryptjs';
+import { generateToken } from '@/lib/jwt';
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,6 +53,14 @@ export async function POST(request: NextRequest) {
       isVerified: false, // Doctors need to be verified before accessing full features
     });
 
+    // Generate JWT token
+    const token = generateToken({
+      id: doctor._id.toString(),
+      email: doctor.email,
+      role: 'doctor',
+      isVerified: doctor.isVerified
+    });
+
     // Return the doctor (excluding password)
     const doctorResponse = {
       id: doctor._id,
@@ -68,7 +77,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         message: 'Registration successful! Your account is pending verification.', 
-        doctor: doctorResponse 
+        doctor: doctorResponse,
+        token
       },
       { status: 201 }
     );
