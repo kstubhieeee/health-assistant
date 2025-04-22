@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connect } from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
 import bcrypt from 'bcryptjs';
-import { cookies } from 'next/headers';
+import { generateToken } from '@/lib/jwt';
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,14 +31,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Set cookie with doctor ID (for session)
-    cookies().set({
-      name: 'doctorId',
-      value: doctor._id.toString(),
-      httpOnly: true,
-      path: '/',
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24 * 7, // 1 week
+    // Generate JWT token
+    const token = generateToken({
+      id: doctor._id.toString(),
+      email: doctor.email,
+      role: 'doctor',
+      isVerified: doctor.isVerified
     });
 
     // Create doctor data without password
@@ -52,10 +50,11 @@ export async function POST(request: NextRequest) {
       isVerified: doctor.isVerified
     };
 
-    // Return success response with doctor data
+    // Return success response with doctor data and token
     return NextResponse.json({ 
       message: 'Login successful',
-      doctor: doctorData 
+      doctor: doctorData,
+      token
     });
   } catch (error) {
     console.error('Doctor login error:', error);
