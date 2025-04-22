@@ -22,7 +22,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Info, Loader2 } from "lucide-react";
+import { Info, Loader2, Activity, Heart, AlertTriangle, CheckCircle, Cigarette, Wine, Apple, Dumbbell, Brain, ShieldAlert, User } from "lucide-react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -93,41 +93,38 @@ export default function HealthCheck() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          endpoint: "/lf/a5f41bdf-f499-42e4-9506-50a4e0a779fc/api/v1/run/1102782b-5597-4176-98b0-18a0f977e74b?stream=false",
-          body: {
-            input_value: JSON.stringify({
-              age: parseInt(data.age),
-              sex: data.sex,
-              bmi: parseFloat(data.bmi),
-              health_conditions: {
-                high_bp: data.highBP,
-                high_cholesterol: data.highCholesterol,
-                stroke: data.stroke,
-                heart_disease: data.heartDisease,
-              },
-              lifestyle: {
-                smoker: data.smoker,
-                physical_activity: data.physicalActivity,
-                fruits_consumption: data.fruitsConsumption,
-                vegetables_consumption: data.vegetablesConsumption,
-                heavy_alcohol: data.heavyAlcohol,
-              },
-              health_status: {
-                general_health: data.generalHealth,
-                mental_health: parseInt(data.mentalHealth),
-                physical_health: parseInt(data.physicalHealth),
-                difficulty_walking: data.difficultyWalking,
-              }
-            }),
-            input_type: "chat",
-            output_type: "chat",
-            tweaks: {
-              "ChatInput-sDv2I": {},
-              "GoogleGenerativeAIModel-xsrJU": {},
-              "ChatOutput-ubBb2": {},
-              "AstraDB-SbKxl": {},
-              "ParseData-IEx10": {}
+          input_value: JSON.stringify({
+            age: parseInt(data.age),
+            sex: data.sex,
+            bmi: parseFloat(data.bmi),
+            health_conditions: {
+              high_bp: data.highBP,
+              high_cholesterol: data.highCholesterol,
+              stroke: data.stroke,
+              heart_disease: data.heartDisease,
+            },
+            lifestyle: {
+              smoker: data.smoker,
+              physical_activity: data.physicalActivity,
+              fruits_consumption: data.fruitsConsumption,
+              vegetables_consumption: data.vegetablesConsumption,
+              heavy_alcohol: data.heavyAlcohol,
+            },
+            health_status: {
+              general_health: data.generalHealth,
+              mental_health: parseInt(data.mentalHealth),
+              physical_health: parseInt(data.physicalHealth),
+              difficulty_walking: data.difficultyWalking,
             }
+          }),
+          input_type: "chat",
+          output_type: "chat",
+          tweaks: {
+            "ChatInput-sDv2I": {},
+            "GoogleGenerativeAIModel-xsrJU": {},
+            "ChatOutput-ubBb2": {},
+            "AstraDB-SbKxl": {},
+            "ParseData-IEx10": {}
           }
         })
       });
@@ -145,6 +142,39 @@ export default function HealthCheck() {
     } catch (err) {
       console.error('Detailed error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred while submitting the assessment');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const testApiConnection = async () => {
+    try {
+      setIsSubmitting(true);
+      setError(null);
+      
+      const response = await fetch("/api/health-assessment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input_value: "Hello from health assessment app!",
+          input_type: "chat",
+          output_type: "chat"
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error + (errorData.details ? `\nDetails: ${errorData.details}` : ''));
+      }
+
+      const result = await response.json();
+      setApiResponse(result);
+      
+      console.log('Test API Response:', result);
+      
+    } catch (err) {
+      console.error('Test API error:', err);
+      setError(err instanceof Error ? err.message : 'An error occurred while testing API connection');
     } finally {
       setIsSubmitting(false);
     }
@@ -350,7 +380,7 @@ export default function HealthCheck() {
               </div>
             </div>
 
-            <div className="flex justify-center">
+            <div className="flex justify-center gap-4">
               <Button type="submit" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>
@@ -361,6 +391,7 @@ export default function HealthCheck() {
                   "Submit Assessment"
                 )}
               </Button>
+             
             </div>
 
             {error && (
@@ -370,29 +401,126 @@ export default function HealthCheck() {
             )}
 
             {apiResponse && (
-              <div className="mt-8 p-6 bg-secondary rounded-lg">
-                <h3 className="text-xl font-semibold mb-4">Health Assessment Results</h3>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  {apiResponse.outputs?.[0]?.outputs?.[0]?.outputs?.message?.message ? (
-                    <div 
-                      className="markdown-content"
-                      dangerouslySetInnerHTML={{ 
-                        __html: marked.parse(apiResponse.outputs[0].outputs[0].outputs.message.message) 
-                      }}
-                    />
-                  ) : apiResponse.type === 'text' ? (
-                    <div 
-                      className="markdown-content"
-                      dangerouslySetInnerHTML={{ 
-                        __html: marked.parse(apiResponse.text) 
-                      }}
-                    />
-                  ) : (
-                    <pre className="text-sm whitespace-pre-wrap">
-                      {JSON.stringify(apiResponse, null, 2)}
-                    </pre>
-                  )}
+              <div className="mt-8 p-6 bg-secondary rounded-lg shadow-lg">
+                <div className="flex items-center mb-6 gap-2">
+                  <Activity className="h-6 w-6 text-primary" />
+                  <h3 className="text-xl font-semibold">Health Assessment Results</h3>
                 </div>
+                
+                {apiResponse.outputs?.[0]?.outputs?.[0]?.outputs?.message?.message ? (
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                      {/* Health Summary Card */}
+                      <div className="bg-background rounded-lg p-4 shadow-sm border border-border">
+                        <div className="flex items-center gap-2 mb-3">
+                          <Heart className="h-5 w-5 text-red-500" />
+                          <h4 className="font-medium">Health Summary</h4>
+                        </div>
+                        <Badge className="mb-2 bg-blue-100 text-blue-800 hover:bg-blue-100">
+                          <User className="h-3 w-3 mr-1" />
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).age} Years Old
+                        </Badge>
+                        <Badge className="ml-2 mb-2 bg-purple-100 text-purple-800 hover:bg-purple-100">
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).sex === "male" ? "♂ Male" : "♀ Female"}
+                        </Badge>
+                        <Badge className="ml-2 mb-2 bg-green-100 text-green-800 hover:bg-green-100">
+                          <Activity className="h-3 w-3 mr-1" />
+                          BMI: {JSON.parse(apiResponse.outputs[0].inputs.input_value).bmi}
+                        </Badge>
+                      </div>
+                      
+                      {/* Health Conditions Card */}
+                      <div className="bg-background rounded-lg p-4 shadow-sm border border-border">
+                        <div className="flex items-center gap-2 mb-3">
+                          <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                          <h4 className="font-medium">Health Conditions</h4>
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-1 text-sm">
+                            <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).health_conditions.high_bp ? 
+                              "bg-red-100 text-red-800 hover:bg-red-100" : 
+                              "bg-green-100 text-green-800 hover:bg-green-100"}>
+                              <ShieldAlert className="h-3 w-3 mr-1" />
+                              {JSON.parse(apiResponse.outputs[0].inputs.input_value).health_conditions.high_bp ? 
+                                "High Blood Pressure" : "Normal Blood Pressure"}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-1 text-sm">
+                            <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).health_conditions.high_cholesterol ? 
+                              "bg-red-100 text-red-800 hover:bg-red-100" : 
+                              "bg-green-100 text-green-800 hover:bg-green-100"}>
+                              <ShieldAlert className="h-3 w-3 mr-1" />
+                              {JSON.parse(apiResponse.outputs[0].inputs.input_value).health_conditions.high_cholesterol ? 
+                                "High Cholesterol" : "Normal Cholesterol"}
+                            </Badge>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Lifestyle Section */}
+                    <div className="bg-background rounded-lg p-4 shadow-sm border border-border mb-6">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Dumbbell className="h-5 w-5 text-indigo-500" />
+                        <h4 className="font-medium">Lifestyle</h4>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.smoker ? 
+                          "bg-red-100 text-red-800 hover:bg-red-100" : 
+                          "bg-green-100 text-green-800 hover:bg-green-100"}>
+                          <Cigarette className="h-3 w-3 mr-1" />
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.smoker ? "Smoker" : "Non-Smoker"}
+                        </Badge>
+                        <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.physical_activity ? 
+                          "bg-green-100 text-green-800 hover:bg-green-100" : 
+                          "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"}>
+                          <Dumbbell className="h-3 w-3 mr-1" />
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.physical_activity ? 
+                            "Physically Active" : "Limited Physical Activity"}
+                        </Badge>
+                        <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.fruits_consumption ? 
+                          "bg-green-100 text-green-800 hover:bg-green-100" : 
+                          "bg-yellow-100 text-yellow-800 hover:bg-yellow-100"}>
+                          <Apple className="h-3 w-3 mr-1" />
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.fruits_consumption ? 
+                            "Consumes Fruits" : "Limited Fruit Consumption"}
+                        </Badge>
+                        <Badge className={JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.heavy_alcohol ? 
+                          "bg-red-100 text-red-800 hover:bg-red-100" : 
+                          "bg-green-100 text-green-800 hover:bg-green-100"}>
+                          <Wine className="h-3 w-3 mr-1" />
+                          {JSON.parse(apiResponse.outputs[0].inputs.input_value).lifestyle.heavy_alcohol ? 
+                            "Heavy Alcohol Use" : "Moderate/No Alcohol Use"}
+                        </Badge>
+                      </div>
+                    </div>
+                    
+                    {/* Analysis Results */}
+                    <div className="bg-background rounded-lg p-4 shadow-sm border border-border">
+                      <div className="flex items-center gap-2 mb-3">
+                        <Brain className="h-5 w-5 text-primary" />
+                        <h4 className="font-medium">Detailed Analysis</h4>
+                      </div>
+                      <div 
+                        className="markdown-content prose prose-sm max-w-none dark:prose-invert"
+                        dangerouslySetInnerHTML={{ 
+                          __html: marked.parse(apiResponse.outputs[0].outputs[0].outputs.message.message) 
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : apiResponse.type === 'text' ? (
+                  <div 
+                    className="markdown-content prose prose-sm max-w-none dark:prose-invert"
+                    dangerouslySetInnerHTML={{ 
+                      __html: marked.parse(apiResponse.text) 
+                    }}
+                  />
+                ) : (
+                  <pre className="text-sm whitespace-pre-wrap bg-background rounded-lg p-4 shadow-sm border border-border">
+                    {JSON.stringify(apiResponse, null, 2)}
+                  </pre>
+                )}
               </div>
             )}
           </form>
