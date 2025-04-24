@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { verifyToken, extractTokenFromHeader } from '@/lib/jwt';
 
 export function middleware(request: NextRequest) {
   // Get the pathname from the URL
@@ -20,26 +19,20 @@ export function middleware(request: NextRequest) {
 
   // Check if the path is for doctor dashboard
   if (path.startsWith('/doctor/dashboard')) {
-    // Get authorization header
-    const authHeader = request.headers.get('authorization');
+    // Get token from cookie
+    const token = request.cookies.get('doctor_token')?.value;
     
-    // Extract token from header
-    const token = extractTokenFromHeader(authHeader);
-    
-    // If no token or invalid token, redirect to doctor login
+    // If no token, redirect to doctor login
     if (!token) {
+      console.log("Middleware: No token cookie found, redirecting to login");
       const url = new URL('/doctor', request.url);
       return NextResponse.redirect(url);
     }
     
-    // Verify token
-    const decoded = verifyToken(token);
-    
-    // If token is invalid or not a doctor token, redirect to login
-    if (!decoded || decoded.role !== 'doctor') {
-      const url = new URL('/doctor', request.url);
-      return NextResponse.redirect(url);
-    }
+    // For Edge runtime compatibility, we'll just check if the token exists
+    // The actual token verification will happen in the API endpoints
+    // We don't need to do full verification here since the /api/auth/doctor-session
+    // endpoint will perform full verification with the Node.js runtime
   }
 
   return NextResponse.next();

@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { connect } from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
-import { verifyToken, extractTokenFromHeader } from '@/lib/jwt';
+import { verifyToken } from '@/lib/jwt';
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authorization header
-    const authHeader = request.headers.get('authorization');
-    
-    // Extract token from header
-    const token = extractTokenFromHeader(authHeader);
+    // Get token from cookie
+    const token = cookies().get('doctor_token')?.value;
     
     if (!token) {
       return NextResponse.json(

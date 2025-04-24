@@ -1,7 +1,17 @@
 import jwt from 'jsonwebtoken';
 
-// In a real app, you should use environment variables for these secrets
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-here-change-in-production';
+// Get the JWT secret from environment variables or use a consistent fallback
+// IMPORTANT: In production, always use environment variables
+const DEFAULT_SECRET = 'healthcare-platform-jwt-secret-key-local-dev-only';
+const JWT_SECRET = process.env.JWT_SECRET || DEFAULT_SECRET;
+
+// Add warning for development environments
+if (JWT_SECRET === DEFAULT_SECRET) {
+  console.warn(
+    'WARNING: Using default JWT secret key. Set JWT_SECRET environment variable in production.'
+  );
+}
+
 const JWT_EXPIRES_IN = '7d'; // Token expires in 7 days
 
 export interface JwtPayload {

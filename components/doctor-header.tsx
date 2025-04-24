@@ -34,13 +34,27 @@ export default function DoctorHeader({ doctorName }: DoctorHeaderProps) {
     }
   }, [doctorName]);
 
-  const handleLogout = () => {
-    // Clear token and doctor data from localStorage
-    localStorage.removeItem("token");
-    localStorage.removeItem("doctor");
-    
-    // Redirect to login page
-    router.push("/doctor");
+  const handleLogout = async () => {
+    try {
+      // Call the logout API to clear the cookie
+      const response = await fetch("/api/auth/doctor-logout", {
+        method: "POST",
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to logout properly");
+      }
+      
+      // Clear localStorage data
+      localStorage.removeItem("doctor");
+      
+      // Redirect to login page
+      window.location.href = "/doctor";
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Still redirect even if there's an error
+      window.location.href = "/doctor";
+    }
   };
 
   const getInitials = (name: string) => {

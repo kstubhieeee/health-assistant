@@ -58,6 +58,8 @@ export default function DoctorPage() {
     setLoginError("");
 
     try {
+      console.log("Attempting login with:", { email: loginEmail });
+      
       // Make API call to login
       const response = await fetch("/api/auth/doctor-login", {
         method: "POST",
@@ -76,12 +78,33 @@ export default function DoctorPage() {
         throw new Error(data.error || "Login failed");
       }
 
-      // Store the JWT token and doctor data in localStorage
-      localStorage.setItem("token", data.token);
+      console.log("Login successful, storing doctor data");
+      
+      // Clear any existing doctor data
+      localStorage.removeItem("doctor");
+      
+      // Store doctor data in localStorage (for UI purposes only)
       localStorage.setItem("doctor", JSON.stringify(data.doctor));
-
-      // On successful login, redirect to dashboard
-      router.push("/doctor/dashboard");
+      
+      // Call the set-cookie API to set the HTTP-only cookie
+      const cookieResponse = await fetch("/api/auth/set-doctor-cookie", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: data.token
+        }),
+      });
+      
+      if (!cookieResponse.ok) {
+        throw new Error("Failed to set authentication cookie");
+      }
+      
+      console.log("Redirecting to dashboard");
+      
+      // Use window.location for a full page navigation
+      window.location.href = "/doctor/dashboard";
     } catch (error: any) {
       console.error("Login error:", error);
       setLoginError(error.message || "Invalid email or password");
@@ -114,6 +137,8 @@ export default function DoctorPage() {
     }
 
     try {
+      console.log("Submitting registration data");
+      
       const response = await fetch("/api/auth/doctor-register", {
         method: "POST",
         headers: {
@@ -128,12 +153,33 @@ export default function DoctorPage() {
         throw new Error(data.error || "Registration failed");
       }
 
-      // Store the JWT token and doctor data in localStorage
-      localStorage.setItem("token", data.token);
+      console.log("Registration successful, storing doctor data");
+      
+      // Clear any existing doctor data
+      localStorage.removeItem("doctor");
+      
+      // Store doctor data in localStorage (for UI purposes only)
       localStorage.setItem("doctor", JSON.stringify(data.doctor));
-
-      // Redirect to dashboard to show verification status
-      router.push("/doctor/dashboard");
+      
+      // Call the set-cookie API to set the HTTP-only cookie
+      const cookieResponse = await fetch("/api/auth/set-doctor-cookie", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          token: data.token
+        }),
+      });
+      
+      if (!cookieResponse.ok) {
+        throw new Error("Failed to set authentication cookie");
+      }
+      
+      console.log("Redirecting to dashboard");
+      
+      // Use window.location for a full page navigation
+      window.location.href = "/doctor/dashboard";
     } catch (error: any) {
       console.error("Registration error:", error);
       setRegistrationError(error.message || "Registration failed. Please try again.");
