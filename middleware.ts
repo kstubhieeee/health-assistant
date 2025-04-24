@@ -35,10 +35,36 @@ export function middleware(request: NextRequest) {
     // endpoint will perform full verification with the Node.js runtime
   }
 
+  // Check if the path is for patient dashboard
+  if (path === '/dashboard' || path.startsWith('/check') || path === '/bmi' || path.startsWith('/vitals') || path.startsWith('/appointments') || path.startsWith('/records') || path.startsWith('/analytics')) {
+    // Check for user session cookie from next-auth
+    const session = request.cookies.get('next-auth.session-token')?.value || 
+                    request.cookies.get('__Secure-next-auth.session-token')?.value;
+    
+    // If no session, redirect to sign in page
+    if (!session) {
+      console.log("Middleware: No patient session found, redirecting to login");
+      const url = new URL('/auth/signin', request.url);
+      // Add a redirect parameter to return to the dashboard after sign in
+      url.searchParams.set('callbackUrl', '/dashboard');
+      return NextResponse.redirect(url);
+    }
+  }
+
   return NextResponse.next();
 }
 
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: ['/admin/dashboard/:path*', '/doctor/dashboard/:path*'],
+  matcher: [
+    '/admin/dashboard/:path*', 
+    '/doctor/dashboard/:path*',
+    '/dashboard',
+    '/check',
+    '/bmi',
+    '/vitals',
+    '/appointments',
+    '/records',
+    '/analytics'
+  ],
 }; 
