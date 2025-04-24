@@ -370,8 +370,8 @@ export default function VitalsPage() {
                           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                           .map((vital) => (
                             <div key={vital.id} className="grid grid-cols-7 p-2 border-b last:border-0 hover:bg-muted/30">
-                              <div className="col-span-1" suppressHydrationWarning>{format(new Date(vital.date), "MMM d, yyyy")}</div>
-                              <div className="col-span-1" suppressHydrationWarning>{format(new Date(vital.date), "h:mm a")}</div>
+                              <div className="col-span-1">{format(new Date(vital.date), "MMM d, yyyy")}</div>
+                              <div className="col-span-1">{format(new Date(vital.date), "h:mm a")}</div>
                               <div className="col-span-1">{vital.bloodPressureSystolic}/{vital.bloodPressureDiastolic}</div>
                               <div className="col-span-1">{vital.heartRate} bpm</div>
                               <div className="col-span-1">{vital.temperature}°F</div>

@@ -36,7 +36,7 @@ export function middleware(request: NextRequest) {
   }
 
   // Check if the path is for patient dashboard
-  if (path === '/dashboard' || path.startsWith('/check') || path === '/bmi' || path.startsWith('/vitals') || path.startsWith('/appointments') || path.startsWith('/records') || path.startsWith('/analytics')) {
+  if (path === '/dashboard' || path.startsWith('/check') || path === '/bmi' || path.startsWith('/vitals') || path.startsWith('/appointments') || path.startsWith('/records')) {
     // Check for user session cookie from next-auth
     const session = request.cookies.get('next-auth.session-token')?.value || 
                     request.cookies.get('__Secure-next-auth.session-token')?.value;
@@ -64,7 +64,6 @@ export const config = {
     '/bmi',
     '/vitals',
     '/appointments',
-    '/records',
-    '/analytics'
+    '/records'
   ],
 }; 

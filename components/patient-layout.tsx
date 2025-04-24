@@ -12,7 +12,8 @@ interface PatientLayoutProps {
 }
 
 export default function PatientLayout({ children }: PatientLayoutProps) {
-  // Using static sidebar with no dynamic elements that could cause hydration mismatches
+  const pathname = usePathname();
+
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -24,9 +25,11 @@ export default function PatientLayout({ children }: PatientLayoutProps) {
               {navigationItems.map((item) => (
                 <Button
                   key={item.href}
-                  // Use ghost for all items on initial render to avoid hydration mismatch
-                  variant="ghost"
-                  className="justify-start"
+                  variant={pathname === item.href ? "secondary" : "ghost"}
+                  className={cn(
+                    "justify-start",
+                    pathname === item.href && "bg-secondary"
+                  )}
                   asChild
                 >
                   <Link href={item.href}>

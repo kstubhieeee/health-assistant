@@ -20,25 +20,16 @@ interface DoctorHeaderProps {
 }
 
 export default function DoctorHeader({ doctorName }: DoctorHeaderProps) {
-  const [mounted, setMounted] = useState(false);
-  const [name, setName] = useState("");
+  const [name, setName] = useState(doctorName || "");
   const router = useRouter();
 
   useEffect(() => {
-    setMounted(true);
-    // Initialize name only after component is mounted to prevent hydration mismatch
-    setName(doctorName || "");
-    
     // If no doctor name is provided, try to get it from localStorage
     if (!doctorName) {
-      try {
-        const storedDoctor = localStorage.getItem("doctor");
-        if (storedDoctor) {
-          const doctorData = JSON.parse(storedDoctor);
-          setName(doctorData.fullName || "Doctor");
-        }
-      } catch (error) {
-        console.error("Error loading doctor data:", error);
+      const storedDoctor = localStorage.getItem("doctor");
+      if (storedDoctor) {
+        const doctorData = JSON.parse(storedDoctor);
+        setName(doctorData.fullName || "Doctor");
       }
     }
   }, [doctorName]);
@@ -76,15 +67,10 @@ export default function DoctorHeader({ doctorName }: DoctorHeaderProps) {
       .substring(0, 2);
   };
 
-  // Display a placeholder during server-side rendering and initial client-side render
-  // to prevent hydration mismatch
-  const displayName = mounted ? name : "";
-  const initials = mounted ? getInitials(name) : "DR";
-
   return (
     <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
-        <div className="flex items-center gap-2 ml-4">
+        <div className="flex items-center gap-2">
           <Stethoscope className="h-6 w-6 text-primary" />
           <Link href="/doctor/dashboard" className="text-xl font-semibold">
             Doctor Portal
@@ -96,7 +82,7 @@ export default function DoctorHeader({ doctorName }: DoctorHeaderProps) {
             <Button variant="ghost" className="h-10 w-10 rounded-full p-0" aria-label="Doctor menu">
               <Avatar>
                 <AvatarFallback className="bg-primary/10 text-primary">
-                  {initials}
+                  {getInitials(name)}
                 </AvatarFallback>
               </Avatar>
             </Button>
@@ -104,7 +90,7 @@ export default function DoctorHeader({ doctorName }: DoctorHeaderProps) {
           <DropdownMenuContent align="end" className="w-56">
             <DropdownMenuLabel>
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{displayName}</p>
+                <p className="text-sm font-medium leading-none">{name}</p>
                 <p className="text-xs leading-none text-muted-foreground">Doctor</p>
               </div>
             </DropdownMenuLabel>

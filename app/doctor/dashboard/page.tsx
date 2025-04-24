@@ -20,81 +20,63 @@ interface DoctorData {
 }
 
 export default function DoctorDashboard() {
-  const [mounted, setMounted] = useState(false);
   const [doctor, setDoctor] = useState<DoctorData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const router = useRouter();
 
   useEffect(() => {
-    setMounted(true);
-    
-    // Client-side only code
-    if (typeof window !== 'undefined') {
+    // We rely on the cookie and middleware for authentication
+    // Just load the doctor data from localStorage for UI display
+    const storedDoctor = localStorage.getItem("doctor");
+    if (storedDoctor) {
       try {
-        // We rely on the cookie and middleware for authentication
-        // Just load the doctor data from localStorage for UI display
-        const storedDoctor = localStorage.getItem("doctor");
-        if (storedDoctor) {
-          const parsedDoctor = JSON.parse(storedDoctor);
-          console.log("Using stored doctor data:", parsedDoctor.email);
-          setDoctor(parsedDoctor);
-          setLoading(false);
-        }
+        const parsedDoctor = JSON.parse(storedDoctor);
+        console.log("Using stored doctor data:", parsedDoctor.email);
+        setDoctor(parsedDoctor);
+        setLoading(false);
       } catch (error) {
         console.error("Error parsing stored doctor data:", error);
       }
-
-      // Always fetch doctor data from session API to get the latest data
-      const fetchDoctorData = async () => {
-        try {
-          console.log("Fetching doctor data from API");
-          const response = await fetch("/api/auth/doctor-session", {
-            // No need to send token - the cookie will be sent automatically
-          });
-
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error || "Failed to get doctor information");
-          }
-
-          const data = await response.json();
-          console.log("Doctor data fetched successfully");
-          setDoctor(data.doctor);
-          
-          // Update stored doctor data in localStorage
-          localStorage.setItem("doctor", JSON.stringify(data.doctor));
-        } catch (error: any) {
-          console.error("Failed to fetch doctor data:", error);
-          setError("Unable to load your information. Please sign in again.");
-          
-          // Clear localStorage data
-          localStorage.removeItem("doctor");
-          
-          // Redirect to login page after 2 seconds
-          setTimeout(() => {
-            window.location.href = "/doctor";
-          }, 2000);
-        } finally {
-          setLoading(false);
-        }
-      };
-
-      fetchDoctorData();
     }
-  }, []);
 
-  // Only show a simple loading state during SSR to prevent hydration mismatch
-  if (!mounted) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="h-8 w-8 rounded-full mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading...</p>
-        </div>
-      </div>
-    );
-  }
+    // Always fetch doctor data from session API to get the latest data
+    const fetchDoctorData = async () => {
+      try {
+        console.log("Fetching doctor data from API");
+        const response = await fetch("/api/auth/doctor-session", {
+          // No need to send token - the cookie will be sent automatically
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to get doctor information");
+        }
+
+        const data = await response.json();
+        console.log("Doctor data fetched successfully");
+        setDoctor(data.doctor);
+        
+        // Update stored doctor data in localStorage
+        localStorage.setItem("doctor", JSON.stringify(data.doctor));
+      } catch (error: any) {
+        console.error("Failed to fetch doctor data:", error);
+        setError("Unable to load your information. Please sign in again.");
+        
+        // Clear localStorage data
+        localStorage.removeItem("doctor");
+        
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          window.location.href = "/doctor";
+        }, 2000);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDoctorData();
+  }, []);
 
   if (loading) {
     return (
@@ -205,7 +187,7 @@ export default function DoctorDashboard() {
             <div>
               <h1 className="text-3xl font-bold">Doctor Dashboard</h1>
               <p className="text-muted-foreground mt-1">
-                Welcome back, Dr. {doctor?.fullName?.split(" ")[1] || doctor?.fullName || ""}
+                Welcome back, Dr. {doctor?.fullName.split(" ")[1] || doctor?.fullName}
               </p>
             </div>
             <Badge variant="outline" className="bg-primary/10 text-primary">
@@ -219,7 +201,7 @@ export default function DoctorDashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 Access your patient records, track health metrics, and monitor progress.
               </p>
-              <Button className="w-full" onClick={() => router.push('/doctor/dashboard/patients')}>View Patients</Button>
+              <Button className="w-full">View Patients</Button>
             </Card>
 
             <Card className="p-6">
@@ -227,15 +209,15 @@ export default function DoctorDashboard() {
               <p className="text-sm text-muted-foreground mb-4">
                 View detailed health analytics and predictive insights for your patients.
               </p>
-              <Button className="w-full" onClick={() => router.push('/doctor/dashboard/analytics')}>Open Analytics</Button>
+              <Button className="w-full">Open Analytics</Button>
             </Card>
 
             <Card className="p-6">
-              <h2 className="text-xl font-semibold mb-4">Appointments</h2>
+              <h2 className="text-xl font-semibold mb-4">AI Diagnostic Support</h2>
               <p className="text-sm text-muted-foreground mb-4">
-                Manage your appointments and patient schedule.
+                Get AI-powered insights based on comprehensive health data.
               </p>
-              <Button className="w-full" onClick={() => router.push('/doctor/dashboard/appointments')}>View Appointments</Button>
+              <Button className="w-full">Start Diagnosis</Button>
             </Card>
           </div>
 

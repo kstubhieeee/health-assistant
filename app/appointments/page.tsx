@@ -274,7 +274,7 @@ export default function AppointmentsPage() {
                             <p className="text-sm text-muted-foreground">{appointment.specialty}</p>
                             <div className="flex items-center gap-1 mt-1">
                               <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-sm" suppressHydrationWarning>
+                              <span className="text-sm">
                                 {format(appointment.date, "EEEE, MMMM d, yyyy")}
                               </span>
                             </div>
@@ -431,7 +431,7 @@ export default function AppointmentsPage() {
                                   </div>
                                   <div className="flex items-center gap-1.5">
                                     <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground" suppressHydrationWarning>
+                                    <span className="text-sm text-muted-foreground">
                                       Next available: {format(doctor.availability.nextAvailable, "EEEE, MMMM d")}
                                     </span>
                                   </div>
@@ -531,7 +531,7 @@ export default function AppointmentsPage() {
                     {selectedDoctor.availability.slots.map((slot) => (
                       <div key={slot.date.toISOString()} className="flex items-center space-x-2">
                         <RadioGroupItem value={slot.date.toISOString()} id={slot.date.toISOString()} />
-                        <Label htmlFor={slot.date.toISOString()} className="cursor-pointer" suppressHydrationWarning>
+                        <Label htmlFor={slot.date.toISOString()} className="cursor-pointer">
                           {format(slot.date, "EEEE, MMMM d, yyyy")}
                         </Label>
                       </div>

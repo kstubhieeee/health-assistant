@@ -38,9 +38,4 @@ export const navigationItems = [
     href: "/vitals",
     icon: Activity,
   },
-  {
-    title: "Health Analytics",
-    href: "/analytics",
-    icon: BarChart3,
-  },
 ]; 
