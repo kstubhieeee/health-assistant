@@ -69,7 +69,7 @@ const AppointmentSchema = new Schema<IAppointment>(
     },
     meetingLink: {
       type: String,
-      // Only required if status is 'approved'
+      required: false
     },
   },
   {

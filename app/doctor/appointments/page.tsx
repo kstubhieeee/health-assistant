@@ -30,8 +30,8 @@ interface Appointment {
   time: string;
   reason: string;
   status: "pending" | "approved" | "rejected";
-  rejectionReason?: string;
-  meetingLink?: string;
+  rejectionReason?: string | null;
+  meetingLink?: string | null;
 }
 
 export default function DoctorAppointmentsPage() {
@@ -43,6 +43,7 @@ export default function DoctorAppointmentsPage() {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [isEditLinkDialogOpen, setIsEditLinkDialogOpen] = useState(false);
   const [meetingLink, setMeetingLink] = useState("");
   const [rejectionReason, setRejectionReason] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -77,6 +78,70 @@ export default function DoctorAppointmentsPage() {
     checkAuth();
   }, [router]);
 
+  // Function to get meeting link from localStorage
+  const getMeetingLinkFromStorage = (appointmentId: string): string | null => {
+    if (typeof window === 'undefined') return null; // Server-side check
+    
+    try {
+      const storageKey = `meetingLink_${appointmentId}`;
+      const storedLink = localStorage.getItem(storageKey);
+      console.log(`Retrieved link from localStorage for ${appointmentId}:`, storedLink);
+      return storedLink;
+    } catch (error) {
+      console.error('Error accessing localStorage:', error);
+      return null;
+    }
+  };
+  
+  // Function to save meeting link to localStorage
+  const saveMeetingLinkToStorage = (appointmentId: string, link: string): void => {
+    if (typeof window === 'undefined') return; // Server-side check
+    
+    try {
+      const storageKey = `meetingLink_${appointmentId}`;
+      localStorage.setItem(storageKey, link);
+      console.log(`Saved link to localStorage for ${appointmentId}:`, link);
+    } catch (error) {
+      console.error('Error saving to localStorage:', error);
+    }
+  };
+
+  // Function to ensure all necessary fields exist in appointment objects
+  const normalizeAppointment = (appointment: Appointment): Appointment => {
+    const normalized = { ...appointment };
+    
+    // Ensure critical fields exist
+    if (!('meetingLink' in normalized)) {
+      console.log(`Adding missing meetingLink field to appointment ${normalized._id}`);
+      normalized.meetingLink = null;
+    }
+    
+    // Try to get meeting link from localStorage if it's null/empty in the database
+    if (!normalized.meetingLink) {
+      const storedLink = getMeetingLinkFromStorage(normalized._id);
+      if (storedLink) {
+        console.log(`Using localStorage meeting link for ${normalized._id}`);
+        normalized.meetingLink = storedLink;
+      }
+    }
+    
+    if (!('rejectionReason' in normalized)) {
+      normalized.rejectionReason = null;
+    }
+    
+    // Ensure patient field exists and has required structure
+    if (!normalized.patient) {
+      console.log(`Adding missing or empty patient field to appointment ${normalized._id}`);
+      normalized.patient = {
+        _id: `unknown-patient-${Date.now()}`, // Generate a unique ID string instead of using mongoose
+        name: `Unknown Patient`,
+        email: `unknown@example.com`
+      };
+    }
+    
+    return normalized;
+  };
+
   // Fetch appointments only after authentication is confirmed
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -97,8 +162,11 @@ export default function DoctorAppointmentsPage() {
         const data = await response.json();
         console.log("Fetched appointments:", data.appointments);
         
+        // Process appointments to ensure all fields exist
+        const processedAppointments = data.appointments.map((app: Appointment) => normalizeAppointment(app));
+        
         // Check for pending appointments specifically
-        const pendingAppointments = data.appointments.filter((a: Appointment) => a.status === "pending");
+        const pendingAppointments = processedAppointments.filter((a: Appointment) => a.status === "pending");
         console.log("Pending appointments:", pendingAppointments);
         
         // Check if patient data exists in pending appointments
@@ -106,7 +174,19 @@ export default function DoctorAppointmentsPage() {
           console.log(`Appointment ${index} patient:`, app.patient);
         });
         
-        setAppointments(data.appointments);
+        // Check for approved appointments without meeting links
+        const approvedWithoutLinks = processedAppointments.filter(
+          (a: Appointment) => a.status === "approved" && (!a.meetingLink || a.meetingLink === '')
+        );
+        
+        if (approvedWithoutLinks.length > 0) {
+          console.log(`Found ${approvedWithoutLinks.length} approved appointments without meeting links:`, 
+            approvedWithoutLinks.map((a: Appointment) => a._id));
+          // Call the fix-links endpoint
+          await fixMissingMeetingLinks();
+        }
+        
+        setAppointments(processedAppointments);
       } catch (error: any) {
         console.error("Error fetching appointments:", error);
         setError(error.message || "Failed to load appointments");
@@ -120,10 +200,59 @@ export default function DoctorAppointmentsPage() {
     }
   }, [isAuthenticated, authChecking]);
 
+  // Function to fix meeting links
+  const fixMissingMeetingLinks = async () => {
+    try {
+      // Use a simple default meeting link
+      const defaultLink = "https://example.com/meeting";
+      
+      const response = await fetch(`/api/appointments/fix-links?defaultLink=${encodeURIComponent(defaultLink)}`, {
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        console.error("Failed to fix meeting links");
+        return;
+      }
+      
+      const data = await response.json();
+      console.log("Fixed meeting links:", data);
+      
+      // Refresh appointments
+      const refreshResponse = await fetch("/api/appointments?role=doctor", {
+        credentials: 'include'
+      });
+      
+      if (refreshResponse.ok) {
+        const refreshData = await refreshResponse.json();
+        setAppointments(refreshData.appointments);
+      }
+    } catch (error) {
+      console.error("Error fixing meeting links:", error);
+    }
+  };
+
   // Filter appointments based on active tab
   const filteredAppointments = appointments.filter(
     appointment => appointment.status === activeTab
   );
+
+  // Debug appointments data
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' && appointments.length > 0) {
+      console.log('All appointments:', appointments);
+      
+      // Log approved appointments specifically
+      const approved = appointments.filter(a => a.status === 'approved');
+      console.log('Approved appointments:', approved);
+      
+      // Check for missing meeting links
+      const missingLinks = approved.filter(a => !a.meetingLink);
+      if (missingLinks.length > 0) {
+        console.log('Approved appointments missing meeting links:', missingLinks);
+      }
+    }
+  }, [appointments]);
 
   // Only log in development
   if (process.env.NODE_ENV !== 'production') {
@@ -136,16 +265,29 @@ export default function DoctorAppointmentsPage() {
     
     try {
       setIsSubmitting(true);
+      console.log('Approving appointment with meeting link:', meetingLink);
       
-      const response = await fetch(`/api/appointments/${selectedAppointment._id}`, {
+      // Simple approach to ensure link has https:// prefix
+      let formattedLink = meetingLink.trim();
+      if (formattedLink && !formattedLink.startsWith('http://') && !formattedLink.startsWith('https://')) {
+        formattedLink = 'https://' + formattedLink;
+      }
+      
+      // Store the meeting link in localStorage immediately
+      saveMeetingLinkToStorage(selectedAppointment._id, formattedLink);
+      
+      // Make sure the selected appointment is normalized before proceeding
+      const normalizedAppointment = normalizeAppointment(selectedAppointment);
+      
+      const response = await fetch(`/api/appointments/${normalizedAppointment._id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: 'include', // Include cookies in the request
+        credentials: 'include',
         body: JSON.stringify({
           status: "approved",
-          meetingLink,
+          meetingLink: formattedLink,
         }),
       });
       
@@ -154,21 +296,46 @@ export default function DoctorAppointmentsPage() {
         throw new Error(errorData.error || "Failed to approve appointment");
       }
       
-      // Update local state
-      setAppointments(appointments.map(appointment => 
-        appointment._id === selectedAppointment._id 
-          ? { ...appointment, status: "approved", meetingLink } 
-          : appointment
-      ));
+      const responseData = await response.json();
+      console.log('Approval response:', responseData);
       
-      // Show success message without toast
+      // Make sure to use the response data to update the local state
+      if (responseData.appointment) {
+        // Normalize the response appointment
+        const normalizedResponseAppointment = normalizeAppointment(responseData.appointment);
+        
+        // Ensure the meeting link from localStorage is used if the API response doesn't include it
+        if (!normalizedResponseAppointment.meetingLink) {
+          normalizedResponseAppointment.meetingLink = formattedLink;
+        }
+        
+        // Update local state using the normalized response data
+        setAppointments(appointments.map(appointment => 
+          appointment._id === normalizedAppointment._id 
+            ? normalizedResponseAppointment
+            : appointment
+        ));
+      } else {
+        // Fallback to manual update if response doesn't include the appointment
+        setAppointments(appointments.map(appointment => 
+          appointment._id === normalizedAppointment._id 
+            ? { 
+                ...normalizeAppointment(appointment), 
+                status: "approved", 
+                meetingLink: formattedLink,
+                rejectionReason: null
+              } 
+            : appointment
+        ));
+      }
+      
+      // Show success message
       alert("Appointment approved. The patient has been notified and provided with the meeting link.");
       
       setIsApproveDialogOpen(false);
       setMeetingLink("");
     } catch (error: any) {
       console.error("Error approving appointment:", error);
-      // Show error without toast
       alert(error.message || "Failed to approve appointment");
     } finally {
       setIsSubmitting(false);
@@ -220,6 +387,84 @@ export default function DoctorAppointmentsPage() {
     }
   };
 
+  // Handle meeting link update for already approved appointments
+  const handleUpdateMeetingLink = async () => {
+    if (!selectedAppointment || !meetingLink) return;
+    
+    try {
+      setIsSubmitting(true);
+      console.log('Updating meeting link for approved appointment:', meetingLink);
+      
+      // Simple approach to ensure link has https:// prefix
+      let formattedLink = meetingLink.trim();
+      if (formattedLink && !formattedLink.startsWith('http://') && !formattedLink.startsWith('https://')) {
+        formattedLink = 'https://' + formattedLink;
+      }
+      
+      // Store the meeting link in localStorage immediately
+      saveMeetingLinkToStorage(selectedAppointment._id, formattedLink);
+      
+      // Make sure the selected appointment is normalized before proceeding
+      const normalizedAppointment = normalizeAppointment(selectedAppointment);
+      
+      const response = await fetch(`/api/appointments/${normalizedAppointment._id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          status: "approved", // Always include status
+          meetingLink: formattedLink,
+        }),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update meeting link");
+      }
+      
+      const responseData = await response.json();
+      console.log('Update meeting link response:', responseData);
+      
+      // Make sure to use the response data to update the local state
+      if (responseData.appointment) {
+        // Normalize the response appointment
+        const normalizedResponseAppointment = normalizeAppointment(responseData.appointment);
+        
+        // Ensure the meeting link from localStorage is used if the API response doesn't include it
+        if (!normalizedResponseAppointment.meetingLink) {
+          normalizedResponseAppointment.meetingLink = formattedLink;
+        }
+        
+        // Update local state using the normalized response data
+        setAppointments(appointments.map(appointment => 
+          appointment._id === normalizedAppointment._id 
+            ? normalizedResponseAppointment
+            : appointment
+        ));
+      } else {
+        // Fallback to manual update if response doesn't include the appointment
+        setAppointments(appointments.map(appointment => 
+          appointment._id === normalizedAppointment._id 
+            ? { ...normalizeAppointment(appointment), meetingLink: formattedLink } 
+            : appointment
+        ));
+      }
+      
+      // Show success message
+      alert("Meeting link updated successfully. The patient has been notified of the new link.");
+      
+      setIsEditLinkDialogOpen(false);
+      setMeetingLink("");
+    } catch (error: any) {
+      console.error("Error updating meeting link:", error);
+      alert(error.message || "Failed to update meeting link");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Show loading state during auth check
   if (authChecking) {
     return (
@@ -236,6 +481,16 @@ export default function DoctorAppointmentsPage() {
       <div className="container mx-auto py-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold">Appointment Requests</h1>
+          {process.env.NODE_ENV !== 'production' && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={fixMissingMeetingLinks}
+              className="text-xs"
+            >
+              Fix Missing Links
+            </Button>
+          )}
         </div>
 
         {/* Remove debug info panel in production */}
@@ -354,14 +609,67 @@ export default function DoctorAppointmentsPage() {
                           <Video className="h-4 w-4 text-green-600" />
                           <p className="text-sm font-medium text-green-800">Meeting Link:</p>
                         </div>
-                        <a 
-                          href={appointment.meetingLink}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm text-blue-600 hover:underline break-all"
-                        >
-                          {appointment.meetingLink}
-                        </a>
+                        {/* Check both appointment.meetingLink and localStorage */}
+                        {(() => {
+                          // Get link from appointment or localStorage
+                          const displayLink = appointment.meetingLink || getMeetingLinkFromStorage(appointment._id);
+                          return displayLink ? (
+                            <>
+                              <a 
+                                href={displayLink}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm text-blue-600 hover:underline break-all"
+                              >
+                                {displayLink}
+                                {!appointment.meetingLink && (
+                                  <span className="text-xs ml-1 text-gray-500">(from local storage)</span>
+                                )}
+                              </a>
+                              <div className="mt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedAppointment(appointment);
+                                    setMeetingLink(displayLink);
+                                    setIsEditLinkDialogOpen(true);
+                                  }}
+                                >
+                                  Edit Link
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <div>
+                              <p className="text-sm text-red-500 mb-2">
+                                Meeting link missing. Please add a meeting link.
+                                {process.env.NODE_ENV !== 'production' && (
+                                  <span className="block text-xs mt-1">
+                                    Debug: Missing meetingLink in {JSON.stringify({
+                                      id: appointment._id, 
+                                      hasField: 'meetingLink' in appointment,
+                                      fieldValue: appointment.meetingLink,
+                                      localStorage: getMeetingLinkFromStorage(appointment._id)
+                                    })}
+                                  </span>
+                                )}
+                              </p>
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  // Normalize the appointment object before using it
+                                  const normalizedAppointment = normalizeAppointment(appointment);
+                                  setSelectedAppointment(normalizedAppointment);
+                                  setMeetingLink('');
+                                  setIsEditLinkDialogOpen(true);
+                                }}
+                              >
+                                Add Meeting Link
+                              </Button>
+                            </div>
+                          );
+                        })()}
                       </div>
                     )}
                     
@@ -425,7 +733,7 @@ export default function DoctorAppointmentsPage() {
                 onChange={(e) => setMeetingLink(e.target.value)}
               />
               <p className="text-xs text-gray-500">
-                Enter a Google Meet, Zoom, or any other video conferencing link.
+                Enter a Google Meet, Zoom, or any other video conferencing link. Make sure to include https:// at the beginning.
               </p>
             </div>
           </div>
@@ -487,6 +795,56 @@ export default function DoctorAppointmentsPage() {
                   <span>Processing...</span>
                 </div> : 
                 "Reject Appointment"
+              }
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Meeting Link Dialog */}
+      <Dialog open={isEditLinkDialogOpen} onOpenChange={setIsEditLinkDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {meetingLink ? 'Edit Meeting Link' : 'Add Meeting Link'}
+            </DialogTitle>
+            <DialogDescription>
+              {meetingLink 
+                ? 'Update the meeting link for this appointment. The patient will be notified of the change.'
+                : 'Provide a meeting link for the patient. This will be sent to them upon update.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <label htmlFor="editMeetingLink" className="text-sm font-medium">
+                Meeting Link <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="editMeetingLink"
+                placeholder="https://meet.google.com/abc-xyz-123"
+                value={meetingLink}
+                onChange={(e) => setMeetingLink(e.target.value)}
+              />
+              <p className="text-xs text-gray-500">
+                Enter a Google Meet, Zoom, or any other video conferencing link. Make sure to include https:// at the beginning.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditLinkDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleUpdateMeetingLink} 
+              disabled={!meetingLink || isSubmitting}
+            >
+              {isSubmitting ? 
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Processing...</span>
+                </div> : 
+                meetingLink ? "Update Meeting Link" : "Add Meeting Link"
               }
             </Button>
           </DialogFooter>

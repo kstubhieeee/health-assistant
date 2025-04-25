@@ -92,21 +92,50 @@ export default function AppointmentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [appointmentStatusFilter, setAppointmentStatusFilter] = useState("all");
 
+  // Function to get meeting link from localStorage
+  const getMeetingLinkFromStorage = (appointmentId: string): string | null => {
+    if (typeof window === "undefined") {
+      console.log('[DEBUG] getMeetingLinkFromStorage called server-side for appointment:', appointmentId);
+      return null;
+    }
+    
+    try {
+      console.log(`[DEBUG] Attempting to get meeting link from storage for appointment: ${appointmentId}`);
+      const storageKey = `meetingLink_${appointmentId}`;
+      const storedLink = localStorage.getItem(storageKey);
+      
+      if (storedLink) {
+        console.log(`[DEBUG] Found meeting link in storage for appointment ${appointmentId}: ${storedLink}`);
+        return storedLink;
+      } else {
+        console.log(`[DEBUG] No meeting link in storage for appointment ${appointmentId}`);
+        return null;
+      }
+    } catch (error) {
+      console.error(`[DEBUG] Error accessing localStorage for appointment ${appointmentId}:`, error);
+      return null;
+    }
+  };
+
   // Check if user is authenticated
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        console.log('[DEBUG] Checking authentication status');
         const response = await fetch("/api/auth/session");
         const data = await response.json();
+        console.log('[DEBUG] Auth session data:', JSON.stringify(data));
         
         if (data.user) {
+          console.log('[DEBUG] User authenticated:', data.user.email);
           setIsAuthenticated(true);
         } else {
+          console.log('[DEBUG] User not authenticated, redirecting to home');
           // Redirect to home if not authenticated
           router.push("/");
         }
       } catch (error) {
-        console.error("Auth check error:", error);
+        console.error("[DEBUG] Auth check error:", error);
         router.push("/");
       } finally {
         setAuthChecking(false);
@@ -125,6 +154,7 @@ export default function AppointmentsPage() {
         setLoadingAppointments(true);
         setAppointmentsError("");
         
+        console.log('[DEBUG] Fetching appointments from API');
         const response = await fetch("/api/appointments");
         
         if (!response.ok) {
@@ -132,9 +162,38 @@ export default function AppointmentsPage() {
         }
         
         const data = await response.json();
-        setAppointments(data.appointments || []);
+        console.log('[DEBUG] Raw appointments data from API:', JSON.stringify(data));
+        console.log('[DEBUG] Patient appointments fetched:', JSON.stringify(data.appointments));
+        
+        // Check for approved appointments with meeting links
+        const approvedWithLinks = data.appointments.filter(
+          (app: {status: string; meetingLink?: string}) => app.status === "approved" && app.meetingLink
+        );
+        console.log('[DEBUG] Approved appointments with meeting links:', JSON.stringify(approvedWithLinks));
+        console.log('[DEBUG] Meeting links in approved appointments:', approvedWithLinks.map((app: any) => app.meetingLink));
+        
+        // Enhance appointments with localStorage meeting links if needed
+        const enhancedAppointments = data.appointments.map((appointment: Appointment) => {
+          console.log(`[DEBUG] Processing appointment ${appointment._id}, status: ${appointment.status}, has meeting link: ${!!appointment.meetingLink}`);
+          if (appointment.status === "approved" && !appointment.meetingLink) {
+            const storedLink = getMeetingLinkFromStorage(appointment._id);
+            console.log(`[DEBUG] For appointment ${appointment._id}, localStorage link:`, storedLink);
+            if (storedLink) {
+              console.log(`[DEBUG] Using localStorage meeting link for appointment ${appointment._id}`);
+              return {
+                ...appointment,
+                meetingLink: storedLink,
+                meetingLinkSource: 'localStorage'
+              };
+            }
+          }
+          return appointment;
+        });
+        
+        console.log('[DEBUG] Enhanced appointments:', JSON.stringify(enhancedAppointments));
+        setAppointments(enhancedAppointments || []);
       } catch (error: any) {
-        console.error("Error fetching appointments:", error);
+        console.error("[DEBUG] Error fetching appointments:", error);
         setAppointmentsError(error.message || "Failed to load appointments");
       } finally {
         setLoadingAppointments(false);
@@ -238,6 +297,8 @@ export default function AppointmentsPage() {
         reason: schedulingReason,
       };
       
+      console.log('[DEBUG] Scheduling appointment with data:', JSON.stringify(appointmentData));
+      
       const response = await fetch("/api/appointments", {
         method: "POST",
         headers: {
@@ -246,18 +307,22 @@ export default function AppointmentsPage() {
         body: JSON.stringify(appointmentData),
       });
       
+      console.log('[DEBUG] Appointment creation response status:', response.status);
+      
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('[DEBUG] Appointment creation error:', errorData);
         throw new Error(errorData.error || "Failed to create appointment");
       }
       
       const data = await response.json();
+      console.log('[DEBUG] New appointment created:', JSON.stringify(data.appointment));
       
       // Add the new appointment to the state
-      setAppointments(prevAppointments => [
-        data.appointment,
-        ...prevAppointments
-      ]);
+      setAppointments(prevAppointments => {
+        console.log('[DEBUG] Adding new appointment to state:', JSON.stringify(data.appointment));
+        return [data.appointment, ...prevAppointments];
+      });
       
       // Reset form and close dialog
       setSelectedDoctor(null);
@@ -272,11 +337,50 @@ export default function AppointmentsPage() {
       // Show success message without toast
       alert("Appointment request has been sent to the doctor");
     } catch (error: any) {
-      console.error("Error scheduling appointment:", error);
+      console.error("[DEBUG] Error scheduling appointment:", error);
       // Show error without toast
       alert(error.message || "Failed to schedule appointment");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  // Function to handle appointment cancellation
+  const handleCancelAppointment = async (appointmentId: string) => {
+    try {
+      console.log(`[DEBUG] Attempting to cancel appointment: ${appointmentId}`);
+      setIsCancelling(appointmentId);
+      
+      const response = await fetch(`/api/appointments/${appointmentId}/cancel`, {
+        method: "PUT",
+      });
+      
+      console.log(`[DEBUG] Cancel appointment response status: ${response.status}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('[DEBUG] Cancel appointment error:', errorData);
+        throw new Error(errorData.error || "Failed to cancel appointment");
+      }
+      
+      const data = await response.json();
+      console.log('[DEBUG] Appointment cancelled successfully:', JSON.stringify(data));
+      
+      // Update the appointments list
+      setAppointments((prevAppointments) =>
+        prevAppointments.map((appointment) =>
+          appointment._id === appointmentId
+            ? { ...appointment, status: "cancelled" }
+            : appointment
+        )
+      );
+      
+      alert("Appointment cancelled successfully");
+    } catch (error: any) {
+      console.error("[DEBUG] Error cancelling appointment:", error);
+      alert(error.message || "Failed to cancel appointment");
+    } finally {
+      setIsCancelling("");
     }
   };
 
@@ -381,24 +485,51 @@ export default function AppointmentsPage() {
                           <p className="text-sm text-gray-600">{appointment.reason}</p>
                         </div>
                         
-                        {appointment.status === "approved" && appointment.meetingLink && (
+                        {appointment.status === "approved" && (appointment.meetingLink || getMeetingLinkFromStorage(appointment._id)) && (
                           <div className="mt-2 p-3 bg-green-50 rounded-md">
                             <div className="flex items-center gap-2 mb-2">
                               <Video className="h-4 w-4 text-green-600" />
                               <p className="text-sm font-medium">Meeting Link:</p>
                             </div>
+                            {console.log(`[DEBUG] Rendering meeting link for appointment ${appointment._id}:`, appointment.meetingLink || getMeetingLinkFromStorage(appointment._id))}
                             <a 
-                              href={appointment.meetingLink} 
+                              href={appointment.meetingLink || getMeetingLinkFromStorage(appointment._id)} 
                               target="_blank" 
                               rel="noopener noreferrer"
                               className="flex items-center gap-1 text-sm text-blue-600 hover:underline break-all"
                             >
-                              {appointment.meetingLink}
+                              {appointment.meetingLink || getMeetingLinkFromStorage(appointment._id)}
                               <ExternalLink className="h-3 w-3" />
+                              {!appointment.meetingLink && appointment.meetingLinkSource === 'localStorage' && (
+                                <span className="text-xs ml-1 text-gray-500">(from local storage)</span>
+                              )}
                             </a>
                             <p className="text-xs text-gray-500 mt-1">
                               Click the link above to join your virtual appointment at the scheduled time.
                             </p>
+                            
+                          </div>
+                        )}
+                        
+                        {appointment.status === "approved" && !appointment.meetingLink && !getMeetingLinkFromStorage(appointment._id) && (
+                          <div className="mt-2 p-3 bg-yellow-50 rounded-md border border-yellow-200">
+                            <div className="flex items-center gap-2">
+                              <Video className="h-4 w-4 text-yellow-600" />
+                              <p className="text-sm font-medium text-yellow-800">
+                                Your appointment has been approved. The meeting link will be added soon.
+                              </p>
+                            </div>
+                            {console.log(`[DEBUG] No meeting link for approved appointment ${appointment._id}`)}
+                            {true && (
+                              <p className="text-xs text-gray-500 mt-1 border-t pt-1">
+                                Debug: No meeting link found in DB or localStorage. MongoDB appointment data: {JSON.stringify({
+                                  id: appointment._id,
+                                  status: appointment.status,
+                                  meetingLink: appointment.meetingLink,
+                                  doctor: appointment.doctor._id
+                                })}
+                              </p>
+                            )}
                           </div>
                         )}
                         

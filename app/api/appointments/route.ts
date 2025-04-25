@@ -75,18 +75,65 @@ export async function GET(request: NextRequest) {
       query.status = status;
     }
     
-    // Get appointments with regular user patients first
+    // Get appointments
+    console.log('Fetching appointments with query:', query);
+    
+    // Get all fields, explicitly including meetingLink
     const appointments = await Appointment.find(query)
       .populate('doctor', 'fullName specialization institution')
       .sort({ date: 1 }) // Sort by date, earliest first
+      .select('patient patientDetails doctor date time reason status rejectionReason meetingLink createdAt updatedAt')
+      .lean() // Use lean() to get plain JS objects instead of Mongoose documents
       .exec();
+      
+    console.log('Raw appointments from database:', appointments.map(app => ({
+      id: app._id,
+      status: app.status,
+      hasLink: !!app.meetingLink,
+      meetingLink: app.meetingLink
+    })));
 
-    // Now use the embedded patientDetails if available, or try to populate from collections if needed
+    // Process appointments with patient details and ensure all fields exist
     const populatedAppointments = await Promise.all(
       appointments.map(async (appointment) => {
         // Create a copy of the appointment object to modify
-        const appointmentObj = appointment.toObject();
+        const appointmentObj = {...appointment};
         
+        // Ensure all fields are present
+        const standardFields = [
+          'meetingLink', 
+          'rejectionReason', 
+          'status', 
+          'reason', 
+          'time', 
+          'date'
+        ];
+        
+        standardFields.forEach(field => {
+          if (!(field in appointmentObj)) {
+            console.log(`Adding missing ${field} field to appointment ${appointmentObj._id}`);
+            appointmentObj[field] = null;
+          }
+        });
+                
+        // Special handling for approved appointments to ensure meetingLink is always present
+        if (appointmentObj.status === 'approved' && appointmentObj.meetingLink === undefined) {
+          console.log(`Adding missing meetingLink field to approved appointment ${appointmentObj._id}`);
+          appointmentObj.meetingLink = null;
+          
+          // Automatically fix in database for future requests
+          try {
+            await Appointment.updateOne(
+              { _id: appointmentObj._id },
+              { $set: { meetingLink: null } }
+            );
+            console.log(`Fixed missing meetingLink field in database for appointment ${appointmentObj._id}`);
+          } catch (err) {
+            console.error(`Failed to fix meetingLink in database for appointment ${appointmentObj._id}:`, err);
+          }
+        }
+        
+        // Rest of the patient population logic
         // Check if we already have embedded patient details
         if (appointment.patientDetails && appointment.patientDetails.name) {
           console.log(`Using embedded patient details for appointment ${appointment._id}: ${appointment.patientDetails.name}`);
@@ -169,33 +216,10 @@ export async function GET(request: NextRequest) {
       })
     );
     
-    // Log details for debugging
-    console.log(`Found ${populatedAppointments.length} appointments for query:`, query);
-    populatedAppointments.forEach((appointment, index) => {
-      console.log(`Appointment ${index}:`, {
-        id: appointment._id,
-        status: appointment.status,
-        patientId: appointment.patient?._id || 'No patient ID',
-        patientData: appointment.patient ? {
-          name: appointment.patient.name,
-          email: appointment.patient.email
-        } : 'Patient data missing'
-      });
-      
-      // If patient data is missing, add placeholder patient data
-      if (!appointment.patient || !appointment.patient.name) {
-        console.log(`Adding placeholder data for appointment ${appointment._id}`);
-        
-        // Use the patient ID if available or generate a placeholder
-        const patientId = appointment.patient?._id || appointment.patient || new mongoose.Types.ObjectId();
-        
-        // Add placeholder patient data
-        appointment.patient = {
-          _id: patientId,
-          name: `Patient ${index + 1}`,
-          email: `patient${index + 1}@example.com`
-        };
-      }
+    // Extra check for approved appointments
+    const approvedAppointments = populatedAppointments.filter(app => app.status === 'approved');
+    approvedAppointments.forEach((app, i) => {
+      console.log(`Approved appointment ${i}: ${app._id}, has meetingLink: ${'meetingLink' in app}, value: ${app.meetingLink || 'null'}`);
     });
     
     return NextResponse.json({ appointments: populatedAppointments });

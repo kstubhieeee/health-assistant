@@ -5,6 +5,7 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 import { verifyToken } from '@/lib/jwt';
 import { cookies } from 'next/headers';
+import mongoose from 'mongoose';
 
 // GET specific appointment by ID
 export async function GET(
@@ -147,25 +148,103 @@ export async function PATCH(
       );
     }
     
-    // Update appointment status
-    appointment.status = status;
-    
-    if (status === 'rejected') {
-      appointment.rejectionReason = rejectionReason;
-      // Clear meeting link if it exists
-      appointment.meetingLink = undefined;
-    } else if (status === 'approved') {
-      appointment.meetingLink = meetingLink;
-      // Clear rejection reason if it exists
-      appointment.rejectionReason = undefined;
+    try {
+      let updatedAppointment;
+      let appointmentObj;
+      
+      if (status === 'rejected') {
+        // Update for rejection
+        updatedAppointment = await Appointment.findByIdAndUpdate(
+          appointmentId,
+          {
+            status: 'rejected',
+            rejectionReason: rejectionReason,
+            meetingLink: null
+          },
+          { new: true, runValidators: true }
+        )
+        .populate('doctor', 'fullName specialization institution')
+        .populate('patient', 'name email');
+        
+        if (!updatedAppointment) {
+          return NextResponse.json({ error: 'Failed to update appointment' }, { status: 500 });
+        }
+        
+        appointmentObj = updatedAppointment.toObject();
+      } 
+      else if (status === 'approved') {
+        // Format meeting link
+        let formattedLink = meetingLink.trim();
+        if (!formattedLink.startsWith('http://') && !formattedLink.startsWith('https://')) {
+          formattedLink = 'https://' + formattedLink;
+        }
+        
+        // First set meeting link directly to make sure it's stored
+        await Appointment.updateOne(
+          { _id: appointmentId },
+          { $set: { meetingLink: formattedLink } }
+        );
+        
+        // Then update the full appointment
+        updatedAppointment = await Appointment.findByIdAndUpdate(
+          appointmentId,
+          {
+            status: 'approved',
+            meetingLink: formattedLink,
+            rejectionReason: null
+          },
+          { new: true, runValidators: true }
+        )
+        .populate('doctor', 'fullName specialization institution')
+        .populate('patient', 'name email');
+        
+        if (!updatedAppointment) {
+          return NextResponse.json({ error: 'Failed to update appointment' }, { status: 500 });
+        }
+        
+        appointmentObj = updatedAppointment.toObject();
+        
+        // Check if the meeting link was properly saved
+        if (!updatedAppointment.meetingLink) {
+          console.warn('Meeting link not saved properly, setting manually in response');
+          appointmentObj.meetingLink = formattedLink;
+          
+          // Try a final fallback update in the database
+          await Appointment.updateOne(
+            { _id: appointmentId },
+            { $set: { meetingLink: formattedLink } }
+          );
+        }
+      }
+      else {
+        return NextResponse.json(
+          { error: 'Invalid status' },
+          { status: 400 }
+        );
+      }
+      
+      // Handle null patient field
+      if (!appointmentObj.patient) {
+        appointmentObj.patient = {
+          _id: new mongoose.Types.ObjectId().toString(),
+          name: "Unknown Patient",
+          email: "unknown@example.com"
+        };
+      }
+      
+      console.log('Final appointment object:', JSON.stringify(appointmentObj, null, 2));
+      
+      return NextResponse.json({ 
+        message: `Appointment ${status}`,
+        appointment: appointmentObj
+      });
+    } catch (error) {
+      console.error('Database update error:', error);
+      return NextResponse.json(
+        { error: 'Database update failed' },
+        { status: 500 }
+      );
     }
-    
-    await appointment.save();
-    
-    return NextResponse.json({ 
-      message: `Appointment ${status}`,
-      appointment 
-    });
   } catch (error) {
     console.error('Error updating appointment:', error);
     return NextResponse.json(
