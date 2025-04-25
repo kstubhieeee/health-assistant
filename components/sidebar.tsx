@@ -9,7 +9,8 @@ import {
   Search,
   Settings,
   User,
-  Scale
+  Scale,
+  FileText
 } from "lucide-react";
 
 export const navigationItems = [
@@ -22,6 +23,11 @@ export const navigationItems = [
     title: "My Appointments",
     href: "/appointments",
     icon: Calendar,
+  },
+  {
+    title: "Meeting Summary",
+    href: "/summary",
+    icon: FileText,
   },
   {
     title: "Medical Records",

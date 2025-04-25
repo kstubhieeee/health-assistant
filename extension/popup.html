@@ -1,0 +1,239 @@
+<!-- popup.html -->
+<!DOCTYPE html>
+<html>
+
+<head>
+  <title>Health AI Assistant - Transcript Tool</title>
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+    :root {
+      --background: 0 0% 100%;
+      --foreground: 155 30% 20%;
+      --card: 0 0% 100%;
+      --card-foreground: 155 30% 20%;
+      --primary: 142 76% 36%;
+      --primary-foreground: 355 100% 100%;
+      --secondary: 142 76% 96%;
+      --secondary-foreground: 142 76% 36%;
+      --muted: 142 76% 96%;
+      --muted-foreground: 155 30% 40%;
+      --border: 142 76% 90%;
+      --radius: 0.5rem;
+    }
+
+    .dark {
+      --background: 155 30% 10%;
+      --foreground: 0 0% 98%;
+      --card: 155 30% 12%;
+      --card-foreground: 0 0% 98%;
+      --primary: 142 76% 46%;
+      --primary-foreground: 155 30% 10%;
+      --secondary: 142 76% 16%;
+      --secondary-foreground: 0 0% 98%;
+      --muted: 142 76% 16%;
+      --muted-foreground: 155 30% 70%;
+      --border: 142 76% 16%;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      width: 520px;
+      font-family: "Inter", sans-serif;
+      font-size: 1rem;
+      background-color: hsl(var(--background));
+      color: hsl(var(--foreground));
+    }
+
+    .container {
+      padding: 1.5rem;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      padding-bottom: 1rem;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .logo-icon {
+      width: 24px;
+      height: 24px;
+      color: hsl(var(--primary));
+      margin-right: 0.5rem;
+    }
+
+    .logo-text {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: hsl(var(--foreground));
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .feature-card {
+      background: hsl(var(--card));
+      padding: 1rem;
+      border-radius: var(--radius);
+      border: 1px solid hsl(var(--border));
+      transition: all 0.2s ease;
+    }
+
+    .feature-card:hover {
+      border-color: hsl(var(--primary));
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+      background: hsl(var(--secondary));
+      color: hsl(var(--secondary-foreground));
+    }
+
+    .feature-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin: 0.5rem 0;
+    }
+
+    .feature-description {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.8rem;
+    }
+
+    .card {
+      background: hsl(var(--card));
+      border-radius: var(--radius);
+      border: 1px solid hsl(var(--border));
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .card-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+      color: hsl(var(--foreground));
+    }
+
+    .radio-item {
+      display: flex;
+      gap: 0.75rem;
+      align-items: flex-start;
+      margin-bottom: 1rem;
+      padding: 0.5rem;
+      border-radius: var(--radius);
+      transition: background-color 0.2s;
+    }
+
+    .radio-item:hover {
+      background-color: hsl(var(--muted));
+    }
+
+    input[type="radio"] {
+      margin-top: 0.25rem;
+      accent-color: hsl(var(--primary));
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    label {
+      cursor: pointer;
+    }
+
+    .label-title {
+      color: hsl(var(--foreground));
+      font-weight: 500;
+    }
+
+    .sub-text {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.85rem;
+      margin-top: 0.25rem;
+      display: block;
+    }
+
+    .footer {
+      text-align: center;
+      color: hsl(var(--muted-foreground));
+      font-size: 0.8rem;
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <header class="header">
+      <svg class="logo-icon" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M8 16s1.5 2 4 2 4-2 4-2" />
+        <path d="M2 12.5C2 18 7 19 12 19s10-1 10-6.5-1-12-10-12S2 7 2 12.5Z" />
+        <path d="M7 9h-.01" />
+        <path d="M17 9h-.01" />
+      </svg>
+      <span class="logo-text">Health AI Assistant</span>
+    </header>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <span class="badge">Transcripts</span>
+        <h3 class="feature-title">Meeting Records</h3>
+        <p class="feature-description">Save all consultation transcripts</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge">Export</span>
+        <h3 class="feature-title">Download Text</h3>
+        <p class="feature-description">Export transcripts as text files</p>
+      </div>
+      <div class="feature-card">
+        <span class="badge">Integration</span>
+        <h3 class="feature-title">Webhook Support</h3>
+        <p class="feature-description">Connect with your medical system</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 class="card-title">Transcript Settings</h2>
+      <div class="radio-item">
+        <input type="radio" name="mode" id="auto-mode" />
+        <label for="auto-mode">
+          <span class="label-title">Auto mode</span>
+          <span class="sub-text">Get transcripts of all consultations automatically</span>
+        </label>
+      </div>
+      <div class="radio-item">
+        <input type="radio" name="mode" id="manual-mode" />
+        <label for="manual-mode">
+          <span class="label-title">Manual mode</span>
+          <span class="sub-text">Switch on transcript as needed using the CC icon in Google Meet</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="footer">
+      &copy; 2023 Health AI Assistant | Consultation Transcript Tool
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+
+</html>

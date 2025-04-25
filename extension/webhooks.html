@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARISE Webhooks</title>
+    <style>
+        @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+        body {
+            font-family: "Inter", sans-serif;
+            padding: 1.5rem;
+            color: #C0C0C0;
+            background: #0A0A1B;
+            font-size: 1rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(to right, #5C5FFF, #FF647C, #00C2D1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin: 0 0 2rem 0;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            color: white;
+            margin-bottom: 1.5rem;
+        }
+
+        .grid-container {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 2rem;
+            align-items: start;
+        }
+
+        .card {
+            background: rgba(26, 26, 46, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid rgba(128, 128, 128, 0.2);
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            border-color: #5C5FFF;
+            box-shadow: 0 0 20px rgba(92, 95, 255, 0.1);
+        }
+
+        .form-field {
+            margin-bottom: 2rem;
+        }
+
+        label {
+            display: block;
+            color: white;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+        }
+
+        .sub-text {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+            margin-top: 0.25rem;
+            display: block;
+        }
+
+        input[type="url"] {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #5C5FFF;
+            border-radius: 8px;
+            background: rgba(26, 26, 46, 0.5);
+            color: white;
+            font-family: "Inter", sans-serif;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        input[type="url"]:focus {
+            outline: none;
+            border-color: #4A4DCC;
+            box-shadow: 0 0 0 2px rgba(92, 95, 255, 0.2);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        input[type="checkbox"],
+        input[type="radio"] {
+            accent-color: #5C5FFF;
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .radio-item {
+            display: flex;
+            gap: 0.75rem;
+            align-items: start;
+            margin-bottom: 1rem;
+        }
+
+        button {
+            background: #5C5FFF;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-family: "Inter", sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: #4A4DCC;
+            transform: scale(1.05);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        details {
+            margin-bottom: 1rem;
+        }
+
+        summary {
+            cursor: pointer;
+            color: #5C5FFF;
+            font-weight: 500;
+            padding: 0.5rem 0;
+        }
+
+        .code-block {
+            background: rgba(26, 26, 46, 0.5);
+            padding: 1rem;
+            border-radius: 8px;
+            border: 1px solid rgba(92, 95, 255, 0.2);
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block pre {
+            margin: 0;
+            white-space: pre;
+            font-family: "Inter", monospace;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+            background: rgba(26, 26, 46, 0.8);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        th,
+        td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(92, 95, 255, 0.2);
+        }
+
+        th {
+            background: rgba(92, 95, 255, 0.1);
+            color: white;
+            font-weight: 500;
+        }
+
+        .status-success {
+            color: #4CAF50;
+            font-weight: 500;
+        }
+
+        .status-failed {
+            color: #f44336;
+            font-weight: 500;
+        }
+
+        .status-new {
+            color: #FFA726;
+            font-weight: 500;
+        }
+
+        .post-button {
+            background: transparent;
+            color: #5C5FFF;
+            border: 1px solid #5C5FFF;
+            padding: 0.5rem 1rem;
+        }
+
+        .post-button:hover {
+            background: rgba(92, 95, 255, 0.1);
+        }
+
+        .notice {
+            color: #a0a0a0;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #5C5FFF;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4A4DCC;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>ARISE Webhooks</h1>
+
+    <div class="grid-container">
+        <div>
+            <h2>Webhook Settings</h2>
+            <div class="card">
+                <div class="form-field">
+                    <label for="webhook-url">Webhook URL</label>
+                    <input type="url" id="webhook-url" placeholder="https://your-webhook-url.com">
+                </div>
+
+                <div class="form-field">
+                    <div class="checkbox-group">
+                        <input type="checkbox" id="auto-post-webhook" checked>
+                        <label for="auto-post-webhook">Automatically post webhooks after each meeting</label>
+                    </div>
+                </div>
+
+                <div class="form-field">
+                    <div class="radio-item">
+                        <input type="radio" name="webhook-body-type" id="simple-webhook-body" checked />
+                        <label for="simple-webhook-body">
+                            <b>Simple webhook body</b>
+                            <span class="sub-text">Pre-formatted data, suitable for no-code integrations</span>
+                        </label>
+                    </div>
+                    <div class="radio-item">
+                        <input type="radio" name="webhook-body-type" id="advanced-webhook-body" />
+                        <label for="advanced-webhook-body">
+                            <b>Advanced webhook body</b>
+                            <span class="sub-text">Raw data, suitable for code integrations</span>
+                        </label>
+                    </div>
+                </div>
+
+                <button id="save-webhook">Save Settings</button>
+            </div>
+
+            <div class="card">
+                <details>
+                    <summary>Sample webhook body (simple)</summary>
+                    <div class="code-block">
+                        <pre>
+{
+    "meetingTitle": "Team meeting",
+    "meetingStartTimestamp": "01/15/2024, 10:00 AM",
+    "meetingEndTimestamp": "01/15/2024, 11:00 AM",
+    "transcript": "Priya (01/15/2024, 10:00 AM)\nHi everyone!\n\nCarlos (01/15/2024, 10:01 AM)\nHello Priya!...\n\n",
+    "chatMessages": "Mohammed (01/15/2024, 10:05 AM)\nCan you share the slides?\n\nSofia (01/15/2024, 10:06 AM)\nHere's the link: ...\n\n"
+}</pre>
+                    </div>
+                </details>
+
+                <details>
+                    <summary>Sample webhook body (advanced)</summary>
+                    <div class="code-block">
+                        <pre>
+{
+    "meetingTitle": "Team meeting",
+    "meetingStartTimestamp": "2024-01-15T15:00:00.000Z",
+    "meetingEndTimestamp": "2024-01-15T11:00:00.000Z",
+    "transcript": [
+        {
+            "personName": "Priya",
+            "timestamp": "2024-01-15T10:00:00.000Z",
+            "transcriptText": "Hi everyone!"
+        },
+        {
+            "personName": "Carlos",
+            "timestamp": "2024-01-15T10:01:00.000Z",
+            "transcriptText": "Hello Priya!"
+        }
+    ],
+    "chatMessages": [
+        {
+            "personName": "Mohammed",
+            "timestamp": "2024-01-15T10:05:00.000Z",
+            "chatMessageText": "Can you share the slides?"
+        },
+        {
+            "personName": "Sofia",
+            "timestamp": "2024-01-15T10:06:00.000Z",
+            "chatMessageText": "Here's the link: ..."
+        }
+    ]
+}</pre>
+                    </div>
+                </details>
+            </div>
+        </div>
+
+        <div>
+            <h2>Recent Meetings</h2>
+            <div class="transcripts-section">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Meeting Title</th>
+                            <th>Meeting Time</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="transcripts-table">
+                        <!-- Table content will be populated by JavaScript -->
+                    </tbody>
+                </table>
+
+                <p class="notice">The transcript may not always be accurate and is only intended to aid in improving
+                    productivity. It is the responsibility of the user to ensure they comply with any applicable
+                    laws/rules.</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="webhooks.js"></script>
+</body>
+
+</html>
