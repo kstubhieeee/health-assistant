@@ -1,38 +1,47 @@
 import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { connect } from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
-import bcrypt from 'bcryptjs';
-import { generateToken } from '@/lib/jwt';
 
 export async function POST(request: NextRequest) {
   try {
-    // Connect to the database
-    await connect();
+    // Parse request body
+    const body = await request.json();
+    const { fullName, email, password, medicalLicense, specialization, institution, credentials } = body;
 
-    // Parse the request body
-    const { 
-      fullName, 
-      email, 
-      password, 
-      medicalLicense, 
-      specialization, 
-      institution, 
-      credentials 
-    } = await request.json();
-
-    // Validate inputs
-    if (!fullName || !email || !password || !medicalLicense) {
+    // Validate required fields
+    if (!fullName || !email || !password || !medicalLicense || !specialization || !institution || !credentials) {
       return NextResponse.json(
-        { error: 'Missing required fields' },
+        { error: 'All fields are required' },
         { status: 400 }
       );
     }
 
-    // Check if doctor already exists
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return NextResponse.json(
+        { error: 'Please provide a valid email address' },
+        { status: 400 }
+      );
+    }
+
+    // Password strength validation
+    if (password.length < 8) {
+      return NextResponse.json(
+        { error: 'Password must be at least 8 characters long' },
+        { status: 400 }
+      );
+    }
+
+    // Connect to database
+    await connect();
+
+    // Check if email already exists
     const existingDoctor = await Doctor.findOne({ email });
     if (existingDoctor) {
       return NextResponse.json(
-        { error: 'An account with this email already exists' },
+        { error: 'Email is already registered' },
         { status: 409 }
       );
     }
@@ -41,8 +50,8 @@ export async function POST(request: NextRequest) {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create the doctor
-    const doctor = await Doctor.create({
+    // Create new doctor
+    const newDoctor = new Doctor({
       fullName,
       email,
       password: hashedPassword,
@@ -50,42 +59,36 @@ export async function POST(request: NextRequest) {
       specialization,
       institution,
       credentials,
-      isVerified: false, // Doctors need to be verified before accessing full features
+      isVerified: false, // Default is unverified until admin approves
     });
 
-    // Generate JWT token
-    const token = generateToken({
-      id: doctor._id.toString(),
-      email: doctor.email,
-      role: 'doctor',
-      isVerified: doctor.isVerified
-    });
+    // Save the doctor to the database
+    await newDoctor.save();
 
-    // Return the doctor (excluding password)
+    // Return success response (exclude password)
     const doctorResponse = {
-      id: doctor._id,
-      fullName: doctor.fullName,
-      email: doctor.email,
-      medicalLicense: doctor.medicalLicense,
-      specialization: doctor.specialization,
-      institution: doctor.institution,
-      credentials: doctor.credentials,
-      isVerified: doctor.isVerified,
-      createdAt: doctor.createdAt,
+      id: newDoctor._id,
+      fullName: newDoctor.fullName,
+      email: newDoctor.email,
+      medicalLicense: newDoctor.medicalLicense,
+      specialization: newDoctor.specialization,
+      institution: newDoctor.institution,
+      credentials: newDoctor.credentials,
+      isVerified: newDoctor.isVerified,
     };
 
     return NextResponse.json(
       { 
-        message: 'Registration successful! Your account is pending verification.', 
-        doctor: doctorResponse,
-        token
-      },
+        message: 'Doctor registration successful. Your account is pending verification.', 
+        doctor: doctorResponse 
+      }, 
       { status: 201 }
     );
   } catch (error: any) {
-    console.error('Doctor registration error:', error);
+    console.error('Error in doctor registration:', error);
+    
     return NextResponse.json(
-      { error: 'Failed to register doctor account', details: error.message },
+      { error: 'Registration failed', details: error.message },
       { status: 500 }
     );
   }

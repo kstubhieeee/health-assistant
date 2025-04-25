@@ -1,549 +1,196 @@
 "use client";
 
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { 
-  Activity, 
   ArrowLeft, 
-  Brain, 
-  Clipboard, 
-  Stethoscope, 
-  UserCircle2, 
-  ShieldCheck, 
-  Lock, 
-  Mail, 
-  Key,
-  UserPlus
+  Clock, 
+  AlertCircle
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
+import DoctorHeader from "@/components/doctor-header";
 
-export default function DoctorPage() {
-  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
-  const [isSubmittingRegistration, setIsSubmittingRegistration] = useState(false);
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
+interface DoctorData {
+  id: string;
+  fullName: string;
+  email: string;
+  specialization: string;
+  institution: string;
+  credentials: string;
+  isVerified: boolean;
+}
+
+export default function DoctorVerificationPage() {
+  const [doctor, setDoctor] = useState<DoctorData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
   const router = useRouter();
 
-  // Registration form fields
-  const [registrationData, setRegistrationData] = useState({
-    fullName: "",
-    email: "",
-    password: "",
-    confirmPassword: "",
-    medicalLicense: "",
-    specialization: "",
-    institution: "",
-    credentials: ""
-  });
-  const [registrationError, setRegistrationError] = useState("");
-
-  const handleRegistrationInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setRegistrationData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmittingLogin(true);
-    setLoginError("");
-
-    try {
-      console.log("Attempting login with:", { email: loginEmail });
-      
-      // Make API call to login
-      const response = await fetch("/api/auth/doctor-login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Login failed");
+  useEffect(() => {
+    // We rely on the cookie and middleware for authentication
+    // Just load the doctor data from localStorage for UI display
+    const storedDoctor = localStorage.getItem("doctor");
+    if (storedDoctor) {
+      try {
+        const parsedDoctor = JSON.parse(storedDoctor);
+        console.log("Using stored doctor data:", parsedDoctor.email);
+        setDoctor(parsedDoctor);
+        
+        // If doctor is verified, redirect to dashboard
+        if (parsedDoctor.isVerified) {
+          console.log("Doctor is verified, redirecting to dashboard");
+          window.location.href = "/doctor/dashboard";
+          return;
+        }
+        
+        setLoading(false);
+      } catch (error) {
+        console.error("Error parsing stored doctor data:", error);
       }
+    }
 
-      console.log("Login successful, storing doctor data");
-      
-      // Clear any existing doctor data
-      localStorage.removeItem("doctor");
-      
-      // Store doctor data in localStorage (for UI purposes only)
-      localStorage.setItem("doctor", JSON.stringify(data.doctor));
-      
-      // Call the set-cookie API to set the HTTP-only cookie
-      const cookieResponse = await fetch("/api/auth/set-doctor-cookie", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token: data.token
-        }),
-      });
-      
-      if (!cookieResponse.ok) {
-        throw new Error("Failed to set authentication cookie");
+    // Always fetch doctor data from session API to get the latest data
+    const fetchDoctorData = async () => {
+      try {
+        console.log("Fetching doctor data from API");
+        const response = await fetch("/api/auth/doctor-session", {
+          // No need to send token - the cookie will be sent automatically
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || "Failed to get doctor information");
+        }
+
+        const data = await response.json();
+        console.log("Doctor data fetched successfully");
+        setDoctor(data.doctor);
+        
+        // Update stored doctor data in localStorage
+        localStorage.setItem("doctor", JSON.stringify(data.doctor));
+        
+        // If doctor is verified, redirect to dashboard
+        if (data.doctor.isVerified) {
+          console.log("Doctor is verified, redirecting to dashboard");
+          window.location.href = "/doctor/dashboard";
+          return;
+        }
+      } catch (error: any) {
+        console.error("Failed to fetch doctor data:", error);
+        setError("Unable to load your information. Please sign in again.");
+        
+        // Clear localStorage data
+        localStorage.removeItem("doctor");
+        
+        // Redirect to login page after 2 seconds
+        setTimeout(() => {
+          window.location.href = "/auth/doctor-login";
+        }, 2000);
+      } finally {
+        setLoading(false);
       }
-      
-      console.log("Redirecting to dashboard");
-      
-      // Use window.location for a full page navigation
-      window.location.href = "/doctor/dashboard";
-    } catch (error: any) {
-      console.error("Login error:", error);
-      setLoginError(error.message || "Invalid email or password");
-      setIsSubmittingLogin(false);
-    }
-  };
+    };
 
-  const handleRegistration = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmittingRegistration(true);
-    setRegistrationError("");
+    fetchDoctorData();
+  }, []);
 
-    // Validation
-    if (registrationData.password !== registrationData.confirmPassword) {
-      setRegistrationError("Passwords do not match");
-      setIsSubmittingRegistration(false);
-      return;
-    }
-
-    if (registrationData.password.length < 8) {
-      setRegistrationError("Password must be at least 8 characters");
-      setIsSubmittingRegistration(false);
-      return;
-    }
-
-    if (!registrationData.medicalLicense) {
-      setRegistrationError("Medical license number is required");
-      setIsSubmittingRegistration(false);
-      return;
-    }
-
-    try {
-      console.log("Submitting registration data");
-      
-      const response = await fetch("/api/auth/doctor-register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(registrationData),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Registration failed");
-      }
-
-      console.log("Registration successful, storing doctor data");
-      
-      // Clear any existing doctor data
-      localStorage.removeItem("doctor");
-      
-      // Store doctor data in localStorage (for UI purposes only)
-      localStorage.setItem("doctor", JSON.stringify(data.doctor));
-      
-      // Call the set-cookie API to set the HTTP-only cookie
-      const cookieResponse = await fetch("/api/auth/set-doctor-cookie", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          token: data.token
-        }),
-      });
-      
-      if (!cookieResponse.ok) {
-        throw new Error("Failed to set authentication cookie");
-      }
-      
-      console.log("Redirecting to dashboard");
-      
-      // Use window.location for a full page navigation
-      window.location.href = "/doctor/dashboard";
-    } catch (error: any) {
-      console.error("Registration error:", error);
-      setRegistrationError(error.message || "Registration failed. Please try again.");
-      setIsSubmittingRegistration(false);
-    }
-  };
-
-  // Helper function to switch tabs
-  const switchToRegisterTab = () => {
-    const registerTab = document.querySelector('[data-value="register"]') as HTMLElement;
-    if (registerTab) registerTab.click();
-  };
-  
-  const switchToLoginTab = () => {
-    const loginTab = document.querySelector('[data-value="login"]') as HTMLElement;
-    if (loginTab) loginTab.click();
-  };
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-secondary">
-      <div className="container mx-auto px-4 py-12">
-        <Link href="/" className="inline-flex items-center text-sm mb-8 hover:underline">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Home
-        </Link>
-
-        <div className="text-center mb-12">
-          <Badge variant="outline" className="mb-4">
-            Healthcare Professional Portal
-          </Badge>
-          <h1 className="text-4xl font-bold mb-4">Medical Professional Access</h1>
-          <p className="text-muted-foreground max-w-2xl mx-auto">
-            Secure access to advanced health analytics and AI-powered diagnostic tools for verified healthcare professionals.
-          </p>
-        </div>
-
-        <div className="grid md:grid-cols-5 gap-8">
-          <div className="md:col-span-2">
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-                <h2 className="text-xl font-semibold">Verified Professional Access</h2>
-              </div>
-              
-              <p className="text-sm text-muted-foreground mb-6">
-                Our platform provides healthcare professionals with advanced tools and insights:
-              </p>
-              
-              <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full mt-0.5">
-                    <UserCircle2 className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium">Patient Management</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Monitor multiple patients and track health metrics over time
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full mt-0.5">
-                    <Brain className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium">AI Diagnostic Support</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Get AI-powered insights based on comprehensive health data
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full mt-0.5">
-                    <Activity className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium">Clinical Analytics</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Access detailed health analytics and predictive insights
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 p-2 rounded-full mt-0.5">
-                    <Clipboard className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-medium">Report Generation</h3>
-                    <p className="text-xs text-muted-foreground">
-                      Create professional reports with evidence-based recommendations
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="mt-8 p-4 bg-secondary rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <Lock className="h-4 w-4 text-amber-500" />
-                  <h3 className="text-sm font-medium">Verification Process</h3>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  To ensure the highest standards of care, all professional accounts undergo verification. 
-                  We verify medical credentials and licenses before granting full access to our professional features.
-                </p>
-              </div>
-            </Card>
-          </div>
-          
-          <div className="md:col-span-3">
-            <Card className="p-8">
-              <Tabs defaultValue="login" className="w-full">
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="login">Sign In</TabsTrigger>
-                  <TabsTrigger value="register">Register as a Doctor</TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="login">
-                  <div className="space-y-2 mb-6">
-                    <h2 className="text-2xl font-semibold">Sign In</h2>
-                    <p className="text-sm text-muted-foreground">
-                      Access your professional healthcare dashboard
-                    </p>
-                  </div>
-                  
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    {loginError && (
-                      <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-                        {loginError}
-                      </div>
-                    )}
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address</Label>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          id="email" 
-                          type="email" 
-                          className="pl-10" 
-                          placeholder="doctor@hospital.com" 
-                          value={loginEmail}
-                          onChange={(e) => setLoginEmail(e.target.value)}
-                          required 
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="password">Password</Label>
-                        <Link href="/auth/forgot-password" className="text-xs text-primary hover:underline">
-                          Forgot password?
-                        </Link>
-                      </div>
-                      <div className="relative">
-                        <Key className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                          id="password" 
-                          type="password" 
-                          className="pl-10" 
-                          placeholder="••••••••" 
-                          value={loginPassword}
-                          onChange={(e) => setLoginPassword(e.target.value)}
-                          required 
-                        />
-                      </div>
-                    </div>
-                    
-                    <Button type="submit" className="w-full" disabled={isSubmittingLogin}>
-                      {isSubmittingLogin ? "Signing in..." : "Sign In"}
-                    </Button>
-                    
-                    <div className="text-center">
-                      <p className="text-xs text-muted-foreground mt-4">
-                        Don't have a professional account?{" "}
-                        <button 
-                          type="button" 
-                          className="text-primary hover:underline"
-                          onClick={switchToRegisterTab}
-                        >
-                          Register now
-                        </button>
-                      </p>
-                    </div>
-                  </form>
-                </TabsContent>
-                
-                <TabsContent value="register">
-                  <div className="space-y-2 mb-6">
-                    <div className="flex items-center gap-2">
-                      <UserPlus className="h-5 w-5 text-primary" />
-                      <h2 className="text-2xl font-semibold">Register as a Healthcare Professional</h2>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      Create your account to access professional healthcare tools and features
-                    </p>
-                  </div>
-                  
-                  <form onSubmit={handleRegistration} className="space-y-4">
-                    {registrationError && (
-                      <div className="p-3 bg-destructive/10 text-destructive text-sm rounded-md">
-                        {registrationError}
-                      </div>
-                    )}
-                    
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="fullName">Full Name</Label>
-                        <Input 
-                          id="fullName" 
-                          name="fullName" 
-                          placeholder="Dr. Jane Smith" 
-                          value={registrationData.fullName}
-                          onChange={handleRegistrationInputChange}
-                          required 
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="email">Email Address</Label>
-                        <Input 
-                          id="email" 
-                          name="email"
-                          type="email" 
-                          placeholder="doctor@hospital.com" 
-                          value={registrationData.email}
-                          onChange={handleRegistrationInputChange}
-                          required 
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="password">Password</Label>
-                        <Input 
-                          id="password" 
-                          name="password"
-                          type="password" 
-                          placeholder="••••••••" 
-                          value={registrationData.password}
-                          onChange={handleRegistrationInputChange}
-                          required 
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Must be at least 8 characters
-                        </p>
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Confirm Password</Label>
-                        <Input 
-                          id="confirmPassword" 
-                          name="confirmPassword"
-                          type="password" 
-                          placeholder="••••••••" 
-                          value={registrationData.confirmPassword}
-                          onChange={handleRegistrationInputChange}
-                          required 
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="pt-2 border-t">
-                      <h3 className="font-medium mb-4">Professional Information</h3>
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="medicalLicense">Medical License Number</Label>
-                          <Input 
-                            id="medicalLicense" 
-                            name="medicalLicense"
-                            placeholder="ML12345678" 
-                            value={registrationData.medicalLicense}
-                            onChange={handleRegistrationInputChange}
-                            required 
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="specialization">Specialization</Label>
-                          <Input 
-                            id="specialization" 
-                            name="specialization"
-                            placeholder="Cardiology, Internal Medicine, etc." 
-                            value={registrationData.specialization}
-                            onChange={handleRegistrationInputChange}
-                            required 
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="grid gap-4 md:grid-cols-2 mt-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="institution">Institution/Practice</Label>
-                          <Input 
-                            id="institution" 
-                            name="institution"
-                            placeholder="City General Hospital" 
-                            value={registrationData.institution}
-                            onChange={handleRegistrationInputChange}
-                            required 
-                          />
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <Label htmlFor="credentials">Professional Credentials</Label>
-                          <Input 
-                            id="credentials" 
-                            name="credentials"
-                            placeholder="MD, FACC, PhD, etc." 
-                            value={registrationData.credentials}
-                            onChange={handleRegistrationInputChange}
-                            required 
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-start space-x-2 pt-2">
-                      <input
-                        type="checkbox"
-                        id="terms"
-                        className="mt-1 border border-input"
-                        required
-                      />
-                      <Label htmlFor="terms" className="text-xs leading-tight">
-                        I confirm that I am a licensed healthcare professional and agree to the{" "}
-                        <Link href="/terms" className="text-primary hover:underline">
-                          Terms of Service
-                        </Link>{" "}
-                        and{" "}
-                        <Link href="/privacy" className="text-primary hover:underline">
-                          Privacy Policy
-                        </Link>
-                        . I understand that my professional credentials will be verified.
-                      </Label>
-                    </div>
-                    
-                    <Button type="submit" className="w-full" disabled={isSubmittingRegistration}>
-                      {isSubmittingRegistration ? "Processing..." : "Create Professional Account"}
-                    </Button>
-                    
-                    <div className="text-center">
-                      <p className="text-xs text-muted-foreground mt-4">
-                        Already have an account?{" "}
-                        <button 
-                          type="button" 
-                          className="text-primary hover:underline"
-                          onClick={switchToLoginTab}
-                        >
-                          Sign in
-                        </button>
-                      </p>
-                    </div>
-                  </form>
-                </TabsContent>
-              </Tabs>
-            </Card>
-          </div>
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Checking account status...</p>
         </div>
       </div>
-    </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Card className="p-8 max-w-md">
+          <div className="flex items-center gap-3 mb-4 text-destructive">
+            <AlertCircle />
+            <h2 className="text-xl font-semibold">Session Error</h2>
+          </div>
+          <p className="mb-6">{error}</p>
+          <Button asChild>
+            <Link href="/auth/doctor-login">Return to Sign In</Link>
+          </Button>
+        </Card>
+      </div>
+    );
+  }
+
+  // Show pending verification UI
+  return (
+    <>
+      <DoctorHeader doctorName={doctor?.fullName} />
+      <div className="min-h-screen bg-gradient-to-b from-background to-secondary pt-6">
+        <div className="container mx-auto px-4 py-6">
+          <Link href="/" className="inline-flex items-center text-sm mb-8 hover:underline">
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back to Home
+          </Link>
+
+          <Card className="max-w-2xl mx-auto p-8">
+            <div className="text-center mb-8">
+              <div className="mx-auto w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mb-4">
+                <Clock className="h-8 w-8 text-amber-500" />
+              </div>
+              <h1 className="text-2xl font-bold mb-2">Verification Pending</h1>
+              <p className="text-muted-foreground">
+                Your professional account is currently under review.
+              </p>
+            </div>
+
+            <div className="space-y-6">
+              <div className="bg-muted p-4 rounded-lg">
+                <h2 className="font-medium mb-2">What happens next?</h2>
+                <p className="text-sm text-muted-foreground">
+                  Our team will verify your professional credentials and medical license. 
+                  This process typically takes 1-3 business days. You'll receive an email 
+                  notification once your account has been approved.
+                </p>
+              </div>
+
+              <div>
+                <h2 className="font-medium mb-2">Your Information</h2>
+                <div className="bg-muted p-4 rounded-lg space-y-2">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Name</span>
+                    <span className="text-sm font-medium">{doctor?.fullName}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Email</span>
+                    <span className="text-sm font-medium">{doctor?.email}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Specialization</span>
+                    <span className="text-sm font-medium">{doctor?.specialization || "Not specified"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm text-muted-foreground">Institution</span>
+                    <span className="text-sm font-medium">{doctor?.institution || "Not specified"}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-4 border-t">
+                <p className="text-sm text-muted-foreground mb-4">
+                  If you need to update your information or have questions about the verification process, please contact our support team.
+                </p>
+                <Button variant="outline" asChild className="w-full">
+                  <Link href="/contact">Contact Support</Link>
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      </div>
+    </>
   );
 } 

@@ -59,11 +59,16 @@ export default function DoctorLoginPage() {
       const data = await response.json();
       
       if (response.ok) {
+        // Store doctor data in localStorage (for UI purposes)
+        if (data.doctor) {
+          localStorage.setItem("doctor", JSON.stringify(data.doctor));
+        }
+        
         // Set doctor token in cookies
         document.cookie = `doctor_token=${data.token}; path=/; max-age=${60 * 60 * 24 * 7}`; // 7 days
         
-        // Redirect to doctor appointments page
-        router.push("/doctor/appointments");
+        // Redirect to doctor entry point - this will redirect to dashboard if verified
+        router.push("/doctor");
       } else {
         setError(data.error || "Login failed");
       }
