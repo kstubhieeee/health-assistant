@@ -17,6 +17,15 @@ const nextConfig = {
       },
     ],
   },
+  // Ensure files can be served from public directory
+  async rewrites() {
+    return [
+      {
+        source: '/files/:path*',
+        destination: '/files/:path*',
+      },
+    ];
+  },
 };
 
 module.exports = nextConfig;
