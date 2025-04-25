@@ -21,7 +21,7 @@ export const doctorNavigationItems = [
   },
   {
     title: "Appointments",
-    href: "/doctor/dashboard/appointments",
+    href: "/doctor/appointments",
     icon: Calendar,
   },
   {

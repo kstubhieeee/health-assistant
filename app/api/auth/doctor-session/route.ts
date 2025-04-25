@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { connect } from '@/lib/db';
+import connect from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
 import { verifyToken } from '@/lib/jwt';
 

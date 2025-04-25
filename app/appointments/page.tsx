@@ -16,7 +16,9 @@ import {
   Filter, 
   Search, 
   X,
-  CalendarCheck 
+  CalendarCheck,
+  Video,
+  ExternalLink 
 } from "lucide-react";
 import PatientLayout from "@/components/patient-layout";
 import { Input } from "@/components/ui/input";
@@ -24,10 +26,11 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { format, addDays, addWeeks } from "date-fns";
+import { format, addDays, parseISO } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 
 // Doctor interface
 interface Doctor {
@@ -49,29 +52,23 @@ interface Doctor {
   yearsExperience: number;
 }
 
-// Appointment interface
+// Appointment interface from API
 interface Appointment {
-  id: string;
-  doctorId: string;
-  doctorName: string;
-  specialty: string;
-  date: Date;
-  status: "upcoming" | "completed" | "cancelled";
-  location: string;
+  _id: string;
+  doctor: {
+    _id: string;
+    fullName: string;
+    specialization: string;
+    institution: string;
+  };
+  date: string;
+  time: string;
+  reason: string;
+  status: "pending" | "approved" | "rejected";
+  rejectionReason?: string;
+  meetingLink?: string;
+  createdAt: string;
 }
-
-// Mock data for appointments
-const mockAppointments: Appointment[] = [
-  {
-    id: "a1",
-    doctorId: "d1",
-    doctorName: "Dr. Sarah Johnson",
-    specialty: "Cardiologist",
-    date: addDays(new Date(), 7),
-    status: "upcoming",
-    location: "Heart Care Medical Center, Room 305"
-  }
-];
 
 export default function AppointmentsPage() {
   const router = useRouter();
@@ -79,7 +76,7 @@ export default function AppointmentsPage() {
   const [authChecking, setAuthChecking] = useState(true);
   const [activeTab, setActiveTab] = useState("appointments");
   const [doctors, setDoctors] = useState<Doctor[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>(mockAppointments);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [filteredDoctors, setFilteredDoctors] = useState<Doctor[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSpecialty, setSelectedSpecialty] = useState("all");
@@ -90,6 +87,10 @@ export default function AppointmentsPage() {
   const [schedulingReason, setSchedulingReason] = useState("");
   const [loadingDoctors, setLoadingDoctors] = useState(false);
   const [doctorsError, setDoctorsError] = useState("");
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [appointmentsError, setAppointmentsError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [appointmentStatusFilter, setAppointmentStatusFilter] = useState("all");
 
   // Check if user is authenticated
   useEffect(() => {
@@ -114,6 +115,36 @@ export default function AppointmentsPage() {
 
     checkAuth();
   }, [router]);
+
+  // Fetch appointments from the API
+  useEffect(() => {
+    const fetchAppointments = async () => {
+      if (!isAuthenticated) return;
+      
+      try {
+        setLoadingAppointments(true);
+        setAppointmentsError("");
+        
+        const response = await fetch("/api/appointments");
+        
+        if (!response.ok) {
+          throw new Error("Failed to fetch appointments");
+        }
+        
+        const data = await response.json();
+        setAppointments(data.appointments || []);
+      } catch (error: any) {
+        console.error("Error fetching appointments:", error);
+        setAppointmentsError(error.message || "Failed to load appointments");
+      } finally {
+        setLoadingAppointments(false);
+      }
+    };
+
+    if (!authChecking && isAuthenticated) {
+      fetchAppointments();
+    }
+  }, [isAuthenticated, authChecking]);
 
   // Fetch doctors from the API
   useEffect(() => {
@@ -154,10 +185,10 @@ export default function AppointmentsPage() {
       }
     };
 
-    if (!authChecking && isAuthenticated) {
+    if (!authChecking && isAuthenticated && activeTab === "find-doctor") {
       fetchDoctors();
     }
-  }, [isAuthenticated, authChecking]);
+  }, [isAuthenticated, authChecking, activeTab]);
 
   // Filter doctors based on search and specialty
   useEffect(() => {
@@ -184,305 +215,316 @@ export default function AppointmentsPage() {
     setFilteredDoctors(filtered);
   }, [searchQuery, selectedSpecialty, doctors]);
 
+  // Filter appointments based on status
+  const filteredAppointments = appointments.filter(appointment => 
+    appointmentStatusFilter === "all" || appointment.status === appointmentStatusFilter
+  );
+
   // Function to schedule an appointment
-  const scheduleAppointment = () => {
-    if (!selectedDoctor || !selectedDate || !selectedTime) return;
+  const scheduleAppointment = async () => {
+    if (!selectedDoctor || !selectedDate || !selectedTime || !schedulingReason) {
+      // Display error without toast
+      alert("Please fill in all required fields");
+      return;
+    }
 
-    const newAppointment: Appointment = {
-      id: `a${appointments.length + 1}`,
-      doctorId: selectedDoctor.id,
-      doctorName: selectedDoctor.name,
-      specialty: selectedDoctor.specialty,
-      date: new Date(selectedDate),
-      status: "upcoming",
-      location: `${selectedDoctor.hospital}, Room ${Math.floor(Math.random() * 400) + 100}`
-    };
-
-    setAppointments([...appointments, newAppointment]);
-    setIsSchedulingOpen(false);
-    setSelectedDoctor(null);
-    setSelectedDate(null);
-    setSelectedTime(null);
-    setSchedulingReason("");
-    setActiveTab("appointments");
+    try {
+      setIsSubmitting(true);
+      
+      const appointmentData = {
+        doctorId: selectedDoctor.id,
+        date: selectedDate.toISOString(),
+        time: selectedTime,
+        reason: schedulingReason,
+      };
+      
+      const response = await fetch("/api/appointments", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(appointmentData),
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create appointment");
+      }
+      
+      const data = await response.json();
+      
+      // Add the new appointment to the state
+      setAppointments(prevAppointments => [
+        data.appointment,
+        ...prevAppointments
+      ]);
+      
+      // Reset form and close dialog
+      setSelectedDoctor(null);
+      setSelectedDate(null);
+      setSelectedTime(null);
+      setSchedulingReason("");
+      setIsSchedulingOpen(false);
+      
+      // Switch to appointments tab
+      setActiveTab("appointments");
+      
+      // Show success message without toast
+      alert("Appointment request has been sent to the doctor");
+    } catch (error: any) {
+      console.error("Error scheduling appointment:", error);
+      // Show error without toast
+      alert(error.message || "Failed to schedule appointment");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  // Get unique specialties for filtering
-  const specialties = Array.from(new Set(doctors.map(doctor => doctor.specialty)));
-
-  // Show loading state while checking authentication
   if (authChecking) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading appointments...</p>
+      <PatientLayout>
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
         </div>
-      </div>
+      </PatientLayout>
     );
   }
 
   return (
     <PatientLayout>
-      <div className="min-h-screen bg-gradient-to-b from-background to-secondary/10 p-6">
-        <div className="container mx-auto max-w-6xl">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4">
-            <h1 className="text-3xl font-bold">Appointments</h1>
-            <Button 
-              onClick={() => {
-                setActiveTab("doctors");
-                setSelectedDoctor(null);
-              }}
-            >
-              Schedule New Appointment
-            </Button>
-          </div>
+      <div className="container mx-auto py-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Appointments</h1>
+        </div>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="appointments">My Appointments</TabsTrigger>
-              <TabsTrigger value="doctors">Available Doctors</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="appointments">
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Calendar className="h-5 w-5 text-primary" />
-                      <CardTitle>Upcoming Appointments</CardTitle>
-                    </div>
-                  </div>
-                  <CardDescription>
-                    Your scheduled doctor appointments
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {appointments.length > 0 ? (
-                    <div className="space-y-4">
-                      {appointments.map(appointment => (
-                        <div key={appointment.id} className="flex flex-col md:flex-row items-start md:items-center gap-4 p-4 border rounded-lg">
-                          <div className="flex-shrink-0">
-                            <Avatar className="h-14 w-14 border-2 border-primary/20">
-                              <AvatarFallback className="bg-primary/10 text-primary">
-                                {appointment.doctorName.split(' ').map(n => n[0]).join('')}
-                              </AvatarFallback>
-                            </Avatar>
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="font-medium">{appointment.doctorName}</h3>
-                            <p className="text-sm text-muted-foreground">{appointment.specialty}</p>
-                            <div className="flex items-center gap-1 mt-1">
-                              <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-sm">
-                                {format(appointment.date, "EEEE, MMMM d, yyyy")}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-1 mt-0.5">
-                              <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                              <span className="text-sm">10:00 AM</span>
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2 w-full md:w-auto mt-2 md:mt-0">
-                            <Badge variant="outline" className="bg-blue-50 text-blue-600 border-blue-200">
-                              {appointment.status}
-                            </Badge>
-                            <Button variant="outline" size="sm">Reschedule</Button>
-                          </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="appointments">My Appointments</TabsTrigger>
+            <TabsTrigger value="find-doctor">Find a Doctor</TabsTrigger>
+          </TabsList>
+
+          {/* My Appointments Tab */}
+          <TabsContent value="appointments" className="space-y-4">
+            <div className="flex justify-between items-center">
+              <Select 
+                value={appointmentStatusFilter} 
+                onValueChange={setAppointmentStatusFilter}
+              >
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Filter by status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Appointments</SelectItem>
+                  <SelectItem value="pending">Pending Approval</SelectItem>
+                  <SelectItem value="approved">Approved</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {loadingAppointments ? (
+              <div className="flex justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              </div>
+            ) : appointmentsError ? (
+              <div className="bg-red-50 p-4 rounded-md text-red-500 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                <p>{appointmentsError}</p>
+              </div>
+            ) : filteredAppointments.length === 0 ? (
+              <div className="text-center p-8 text-gray-500">
+                <CalendarCheck className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                <p className="text-lg font-medium">No appointments found</p>
+                <p className="mb-4">You don't have any appointments yet.</p>
+                <Button onClick={() => setActiveTab("find-doctor")}>
+                  Find a Doctor
+                </Button>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filteredAppointments.map((appointment) => (
+                  <Card key={appointment._id} className="overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <CardTitle>Dr. {appointment.doctor.fullName}</CardTitle>
+                          <CardDescription>{appointment.doctor.specialization}</CardDescription>
                         </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-8 text-muted-foreground">
-                      <Clock className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>You don't have any upcoming appointments.</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-4"
-                        onClick={() => setActiveTab("doctors")}
-                      >
-                        Schedule Now
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle>Past Appointments</CardTitle>
-                  <CardDescription>
-                    View your appointment history
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center p-8 text-muted-foreground">
-                    <p>No past appointments found.</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            
-            <TabsContent value="doctors">
-              <Card className="mb-6">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Find Doctors</CardTitle>
-                  </div>
-                  <CardDescription>Browse and schedule with available healthcare providers</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="mb-6 space-y-4">
-                    <div className="flex flex-col md:flex-row gap-4">
-                      <div className="relative flex-1">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          type="text"
-                          placeholder="Search by name, specialty, or hospital"
-                          className="pl-9"
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                        />
-                        {searchQuery && (
-                          <button 
-                            onClick={() => setSearchQuery("")}
-                            className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
+                        <Badge variant={
+                          appointment.status === "pending" ? "outline" :
+                          appointment.status === "approved" ? "success" : "destructive"
+                        }>
+                          {appointment.status === "pending" ? "Pending" :
+                           appointment.status === "approved" ? "Approved" : "Rejected"}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid gap-2">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm">
+                            {new Date(appointment.date).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm">{appointment.time}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4 text-gray-500" />
+                          <span className="text-sm">{appointment.doctor.institution}</span>
+                        </div>
+                        
+                        <div className="mt-2">
+                          <p className="text-sm font-medium">Reason for visit:</p>
+                          <p className="text-sm text-gray-600">{appointment.reason}</p>
+                        </div>
+                        
+                        {appointment.status === "approved" && appointment.meetingLink && (
+                          <div className="mt-2 p-3 bg-green-50 rounded-md">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Video className="h-4 w-4 text-green-600" />
+                              <p className="text-sm font-medium">Meeting Link:</p>
+                            </div>
+                            <a 
+                              href={appointment.meetingLink} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 text-sm text-blue-600 hover:underline break-all"
+                            >
+                              {appointment.meetingLink}
+                              <ExternalLink className="h-3 w-3" />
+                            </a>
+                            <p className="text-xs text-gray-500 mt-1">
+                              Click the link above to join your virtual appointment at the scheduled time.
+                            </p>
+                          </div>
+                        )}
+                        
+                        {appointment.status === "rejected" && appointment.rejectionReason && (
+                          <div className="mt-2 p-3 bg-red-50 rounded-md">
+                            <p className="text-sm font-medium text-red-800">Reason for rejection:</p>
+                            <p className="text-sm text-red-700">{appointment.rejectionReason}</p>
+                          </div>
                         )}
                       </div>
-                      <Select
-                        defaultValue="all"
-                        value={selectedSpecialty}
-                        onValueChange={setSelectedSpecialty}
-                      >
-                        <SelectTrigger className="w-full md:w-[200px]">
-                          <SelectValue placeholder="Filter by specialty" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">All Specialties</SelectItem>
-                          {specialties.map(specialty => (
-                            <SelectItem key={specialty} value={specialty.toLowerCase()}>
-                              {specialty}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  
-                  {loadingDoctors ? (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
-                    </div>
-                  ) : doctorsError ? (
-                    <div className="text-center p-8 text-destructive">
-                      <AlertTriangle className="h-12 w-12 mx-auto mb-4 text-destructive/50" />
-                      <p>{doctorsError}</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-4"
+                    </CardContent>
+                    <CardFooter className="flex justify-end pt-0">
+                      {appointment.status === "pending" && (
+                        <Button variant="outline" size="sm">
+                          Cancel Request
+                        </Button>
+                      )}
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Find a Doctor Tab */}
+          <TabsContent value="find-doctor" className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="flex-1">
+                <Input
+                  placeholder="Search doctors by name, specialty, or hospital"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <Select value={selectedSpecialty} onValueChange={setSelectedSpecialty}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Specialty" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Specialties</SelectItem>
+                  <SelectItem value="cardiologist">Cardiologist</SelectItem>
+                  <SelectItem value="dermatologist">Dermatologist</SelectItem>
+                  <SelectItem value="neurologist">Neurologist</SelectItem>
+                  <SelectItem value="pediatrician">Pediatrician</SelectItem>
+                  <SelectItem value="orthopedic">Orthopedic</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {loadingDoctors ? (
+              <div className="flex justify-center p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+              </div>
+            ) : doctorsError ? (
+              <div className="bg-red-50 p-4 rounded-md text-red-500 flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5" />
+                <p>{doctorsError}</p>
+              </div>
+            ) : filteredDoctors.length === 0 ? (
+              <div className="text-center p-8 text-gray-500">
+                <Stethoscope className="h-12 w-12 mx-auto mb-2 text-gray-400" />
+                <p className="text-lg font-medium">No doctors found</p>
+                <p>Try adjusting your search filters</p>
+              </div>
+            ) : (
+              <div className="grid gap-4">
+                {filteredDoctors.map((doctor) => (
+                  <Card key={doctor.id} className="overflow-hidden">
+                    <CardHeader className="pb-2">
+                      <div className="flex gap-4">
+                        <Avatar className="h-12 w-12">
+                          <AvatarImage src={doctor.image} alt={doctor.name} />
+                          <AvatarFallback>
+                            <UserCircle className="h-6 w-6" />
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <CardTitle>{doctor.name}</CardTitle>
+                          <CardDescription className="flex items-center gap-1">
+                            <Stethoscope className="h-3 w-3" />
+                            <span>{doctor.specialty}</span>
+                          </CardDescription>
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <MapPin className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm">{doctor.hospital}</span>
+                          </div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <User className="h-4 w-4 text-gray-500" />
+                            <span className="text-sm">{doctor.yearsExperience} years experience</span>
+                          </div>
+                          <div className="flex items-center gap-1 mb-1">
+                            <span className="text-sm font-medium">Credentials:</span>
+                            <span className="text-sm">{doctor.credentials}</span>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium mb-1">Next Available:</p>
+                          <p className="text-sm">
+                            {format(doctor.availability.nextAvailable, "MMM dd, yyyy")}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-end">
+                      <Button
                         onClick={() => {
-                          setActiveTab("appointments");
+                          setSelectedDoctor(doctor);
+                          setIsSchedulingOpen(true);
                         }}
                       >
-                        Back to Appointments
+                        Schedule Appointment
                       </Button>
-                    </div>
-                  ) : filteredDoctors.length > 0 ? (
-                    <div className="space-y-4">
-                      {filteredDoctors.map(doctor => (
-                        <Card key={doctor.id} className="overflow-hidden border hover:shadow-md transition-all duration-200">
-                          <CardContent className="p-0">
-                            <div className="p-4 flex flex-col md:flex-row gap-4">
-                              <div className="flex-shrink-0">
-                                <Avatar className="h-16 w-16 border-2 border-primary/20">
-                                  <AvatarFallback className="bg-primary/10 text-primary">
-                                    {doctor.name.split(' ').map(n => n[0]).join('')}
-                                  </AvatarFallback>
-                                </Avatar>
-                              </div>
-                              <div className="flex-1">
-                                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                                  <div>
-                                    <h3 className="font-medium">{doctor.name}</h3>
-                                    <div className="flex items-center gap-2 mt-0.5">
-                                      <Badge variant="outline" className="bg-primary/10 text-primary border-primary/20">
-                                        {doctor.specialty}
-                                      </Badge>
-                                      <span className="text-xs text-muted-foreground">{doctor.credentials}</span>
-                                    </div>
-                                  </div>
-                                  <div className="mt-2 md:mt-0">
-                                    <div className="flex items-center gap-1 text-amber-500">
-                                      {"★".repeat(Math.floor(doctor.rating))}
-                                      <span className="text-sm text-muted-foreground">({doctor.reviewCount})</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="mt-2 space-y-1">
-                                  <div className="flex items-center gap-1.5">
-                                    <MapPin className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground">
-                                      {doctor.hospital}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground">
-                                      Next available: {format(doctor.availability.nextAvailable, "EEEE, MMMM d")}
-                                    </span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            <div className="px-4 py-3 bg-muted/30 flex flex-col sm:flex-row justify-between items-center gap-2">
-                              <div className="text-sm">
-                                <span className="text-muted-foreground">Experience: </span>
-                                <span className="font-medium">{doctor.yearsExperience} years</span>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button 
-                                  variant="outline" 
-                                  size="sm"
-                                  onClick={() => {
-                                    setSelectedDoctor(doctor);
-                                    setIsSchedulingOpen(true);
-                                  }}
-                                >
-                                  Schedule Appointment
-                                </Button>
-                                <Button variant="ghost" size="sm">View Profile</Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="text-center p-8 text-muted-foreground">
-                      <Stethoscope className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
-                      <p>No doctors found matching your search criteria.</p>
-                      <Button 
-                        variant="outline" 
-                        className="mt-4"
-                        onClick={() => {
-                          setSearchQuery("");
-                          setSelectedSpecialty("all");
-                        }}
-                      >
-                        Clear Filters
-                      </Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </div>
+                    </CardFooter>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Appointment Scheduling Dialog */}
@@ -491,97 +533,70 @@ export default function AppointmentsPage() {
           <DialogHeader>
             <DialogTitle>Schedule Appointment</DialogTitle>
             <DialogDescription>
-              {selectedDoctor ? `Book an appointment with ${selectedDoctor.name}` : "Select date and time for your appointment"}
+              {selectedDoctor ? `with Dr. ${selectedDoctor.name}, ${selectedDoctor.specialty}` : ""}
             </DialogDescription>
           </DialogHeader>
           
           {selectedDoctor && (
             <div className="space-y-4 py-2">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10 border-2 border-primary/20">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {selectedDoctor.name.split(' ').map(n => n[0]).join('')}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <h3 className="font-medium">{selectedDoctor.name}</h3>
-                  <p className="text-sm text-muted-foreground">{selectedDoctor.specialty}</p>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="date">Select Date</Label>
+                <RadioGroup id="date" value={selectedDate?.toISOString() || ""} onValueChange={(value) => setSelectedDate(new Date(value))}>
+                  {selectedDoctor.availability.slots.map((slot, index) => (
+                    <div key={index} className="flex items-center space-x-2">
+                      <RadioGroupItem value={slot.date.toISOString()} id={`date-${index}`} />
+                      <Label htmlFor={`date-${index}`}>{format(slot.date, "EEEE, MMMM d, yyyy")}</Label>
+                    </div>
+                  ))}
+                </RadioGroup>
               </div>
               
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="reason">Reason for visit</Label>
-                  <Input
-                    id="reason"
-                    placeholder="Briefly describe your symptoms or reason"
-                    value={schedulingReason}
-                    onChange={(e) => setSchedulingReason(e.target.value)}
-                    className="mt-1"
-                  />
-                </div>
-                
-                <div>
-                  <Label>Select date</Label>
-                  <RadioGroup 
-                    value={selectedDate?.toISOString() || ""}
-                    onValueChange={(value) => setSelectedDate(new Date(value))}
-                    className="mt-2 space-y-2"
-                  >
-                    {selectedDoctor.availability.slots.map((slot) => (
-                      <div key={slot.date.toISOString()} className="flex items-center space-x-2">
-                        <RadioGroupItem value={slot.date.toISOString()} id={slot.date.toISOString()} />
-                        <Label htmlFor={slot.date.toISOString()} className="cursor-pointer">
-                          {format(slot.date, "EEEE, MMMM d, yyyy")}
-                        </Label>
-                      </div>
-                    ))}
-                  </RadioGroup>
-                </div>
-                
-                {selectedDate && (
-                  <div>
-                    <Label>Select time</Label>
-                    <div className="grid grid-cols-3 gap-2 mt-2">
+              {selectedDate && (
+                <div className="space-y-2">
+                  <Label htmlFor="time">Select Time</Label>
+                  <RadioGroup id="time" value={selectedTime || ""} onValueChange={setSelectedTime}>
+                    <div className="grid grid-cols-2 gap-2">
                       {selectedDoctor.availability.slots
                         .find(slot => slot.date.toDateString() === selectedDate.toDateString())
-                        ?.times.map(time => (
-                          <Button
-                            key={time}
-                            type="button"
-                            variant={selectedTime === time ? "default" : "outline"}
-                            size="sm"
-                            onClick={() => setSelectedTime(time)}
-                          >
-                            {time}
-                          </Button>
-                        ))
-                      }
+                        ?.times.map((time, index) => (
+                          <div key={index} className="flex items-center space-x-2">
+                            <RadioGroupItem value={time} id={`time-${index}`} />
+                            <Label htmlFor={`time-${index}`}>{time}</Label>
+                          </div>
+                        ))}
                     </div>
-                  </div>
-                )}
+                  </RadioGroup>
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <Label htmlFor="reason">Reason for Visit</Label>
+                <Textarea
+                  id="reason"
+                  placeholder="Please briefly describe your symptoms or reason for the appointment"
+                  value={schedulingReason}
+                  onChange={(e) => setSchedulingReason(e.target.value)}
+                />
               </div>
             </div>
           )}
           
           <DialogFooter>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setIsSchedulingOpen(false);
-                setSelectedDoctor(null);
-                setSelectedDate(null);
-                setSelectedTime(null);
-                setSchedulingReason("");
-              }}
-            >
+            <Button variant="outline" onClick={() => setIsSchedulingOpen(false)}>
               Cancel
             </Button>
             <Button 
               onClick={scheduleAppointment}
-              disabled={!selectedDoctor || !selectedDate || !selectedTime}
+              disabled={!selectedDoctor || !selectedDate || !selectedTime || !schedulingReason || isSubmitting}
             >
-              Schedule Appointment
+              {isSubmitting ? (
+                <div className="flex items-center gap-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Submitting...</span>
+                </div>
+              ) : (
+                "Request Appointment"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

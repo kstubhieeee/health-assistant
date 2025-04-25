@@ -51,6 +51,16 @@ export function middleware(request: NextRequest) {
     }
   }
 
+  // Doctor routes protection
+  if (path.startsWith('/doctor') && !path.includes('/auth/doctor-login')) {
+    const doctorToken = request.cookies.get('doctor_token')?.value;
+    
+    if (!doctorToken) {
+      // Redirect to doctor login page if no token
+      return NextResponse.redirect(new URL('/auth/doctor-login', request.url));
+    }
+  }
+
   return NextResponse.next();
 }
 
@@ -64,6 +74,7 @@ export const config = {
     '/bmi',
     '/vitals',
     '/appointments',
-    '/records'
+    '/records',
+    '/doctor/:path*'
   ],
 }; 

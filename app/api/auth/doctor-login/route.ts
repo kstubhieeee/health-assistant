@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { connect } from '@/lib/db';
+import connect from '@/lib/db';
 import Doctor from '@/lib/models/Doctor';
 import bcrypt from 'bcryptjs';
 import { generateToken } from '@/lib/jwt';
